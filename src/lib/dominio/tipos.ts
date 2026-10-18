@@ -20,3 +20,10 @@ export const ETAPAS: { valor: Etapa; rotulo: string }[] = [
 export type Resultado = 'respondeu' | 'pediu_tempo' | 'sem_interesse' | 'sem_resposta'
 
 export type OrigemRetorno = 'sequencia' | 'reativacao' | 'adiado' | 'manual' | 'proposta'
+
+export type TipoValor = 'unico' | 'recorrente'
+export type StatusProposta = 'rascunho' | 'enviada' | 'aceita' | 'recusada'
+export type StatusContrato = 'ativo' | 'pausado' | 'cancelado'
+export type StatusCobranca = 'aberta' | 'paga' | 'suspensa'
+export type TipoCobranca = 'avista' | 'parcela' | 'mensalidade'
+export type Competencia = string // 'YYYY-MM-01'
