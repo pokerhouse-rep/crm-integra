@@ -8,8 +8,9 @@ CRM pessoal (Next.js + Supabase local). Desenvolvimento apenas local.
 2. `npm run db:start` sobe o Supabase local (API em `http://127.0.0.1:54421`).
    As portas foram deslocadas +100 (db 54422, studio 54423) para nao colidir com outro Supabase local.
 3. Rode `npx supabase status` e copie as chaves para `.env.local` e `.env.test.local`, seguindo o modelo de `.env.example` (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`).
-4. `npm run dev` inicia o app em `http://localhost:3000`.
-5. Pelo celular, na mesma rede Wi-Fi: `http://<ip-do-pc>:3000`.
+4. Crie o usuario unico: `npx tsx scripts/criar-usuario.ts <email> <senha>`. Credencial de desenvolvimento em `.env.local` (`DEV_LOGIN_EMAIL` / `DEV_LOGIN_SENHA`).
+5. `npm run dev` inicia o app em `http://localhost:3000`.
+6. Pelo celular, na mesma rede Wi-Fi: `http://<ip-do-pc>:3000`.
 
 ## Testes
 
