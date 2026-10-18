@@ -83,6 +83,26 @@ export interface LeadDetalhe {
   eventos: Evento[]
 }
 
+export interface Tarefa {
+  id: string
+  user_id: string
+  lead_id: string | null
+  titulo: string
+  data: DataISO
+  hora: string | null
+  feita: boolean | null
+  feita_em: string | null
+  created_at: string
+}
+
+export interface ModeloMensagem {
+  id: string
+  user_id: string
+  nome: string
+  texto: string
+  passo: number | null
+}
+
 /** Converte erro do Supabase em Error comum (erros inesperados, não de regra). */
 export function lancarSeErro(erro: PostgrestError | null, contexto: string): void {
   if (erro) throw new Error(`${contexto}: ${erro.message}`)
