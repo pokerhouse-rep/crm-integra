@@ -1,6 +1,15 @@
 import type { PostgrestError, SupabaseClient } from '@supabase/supabase-js'
 import type { DataISO } from '@/lib/dominio/datas'
-import type { Etapa, OrigemRetorno, Resultado } from '@/lib/dominio/tipos'
+import type {
+  Etapa,
+  OrigemRetorno,
+  Resultado,
+  StatusCobranca,
+  StatusContrato,
+  StatusProposta,
+  TipoCobranca,
+  TipoValor,
+} from '@/lib/dominio/tipos'
 
 export type { SupabaseClient }
 
@@ -119,4 +128,106 @@ export interface Opcao {
   nome: string
   ativo: boolean | null
   ordem: number | null
+}
+
+export type TipoDesconto = 'percentual' | 'valor'
+
+export interface ServicoCatalogo {
+  id: string
+  user_id: string
+  nome: string
+  tipo: TipoValor
+  preco_centavos: number
+  ativo: boolean | null
+  ordem: number | null
+}
+
+export interface Proposta {
+  id: string
+  user_id: string
+  lead_id: string
+  titulo: string
+  status: StatusProposta
+  aceita_em: DataISO | null
+  created_at: string
+  updated_at: string
+}
+
+export interface VersaoProposta {
+  id: string
+  user_id: string
+  proposta_id: string
+  numero: number
+  total_unico_centavos: number
+  total_recorrente_centavos: number
+  enviada_em: string | null
+  created_at: string
+}
+
+export interface ItemPropostaRow {
+  id: string
+  user_id: string
+  versao_id: string
+  ordem: number
+  servico_id: string | null
+  descricao: string
+  tipo: TipoValor
+  valor_centavos: number
+  parcelas: number
+  mes_inicio: DataISO | null
+  desconto_tipo: TipoDesconto | null
+  desconto_valor: number | null
+}
+
+export interface Contrato {
+  id: string
+  user_id: string
+  lead_id: string
+  proposta_id: string | null
+  descricao: string
+  dia_vencimento: number
+  data_inicio: DataISO
+  status: StatusContrato
+  pausado_em: DataISO | null
+  cancelado_em: DataISO | null
+  created_at: string
+}
+
+export interface ContratoItem {
+  id: string
+  user_id: string
+  contrato_id: string
+  ordem: number | null
+  descricao: string
+  tipo: TipoValor
+  valor_centavos: number
+  parcelas: number
+  mes_inicio: DataISO | null
+}
+
+export interface Reajuste {
+  id: string
+  user_id: string
+  contrato_item_id: string
+  a_partir_de: DataISO
+  valor_centavos: number
+  created_at: string
+}
+
+export interface Cobranca {
+  id: string
+  user_id: string
+  contrato_id: string
+  contrato_item_id: string
+  lead_id: string
+  tipo: TipoCobranca
+  numero: number | null
+  total_parcelas: number | null
+  competencia: DataISO | null
+  vencimento: DataISO
+  valor_centavos: number
+  status: StatusCobranca
+  pago_em: DataISO | null
+  valor_pago_centavos: number | null
+  created_at: string
 }
