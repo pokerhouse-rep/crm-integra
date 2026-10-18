@@ -1,4 +1,4 @@
-import { lancarSeErro, type Config, type Opcao, type SupabaseClient } from './tipos'
+import { lancarSeErro, type Config, type ModeloMensagem, type Opcao, type SupabaseClient } from './tipos'
 
 export async function obterConfig(db: SupabaseClient): Promise<Config> {
   const { data, error } = await db
@@ -28,4 +28,11 @@ export async function listarOpcoes(
     .order('nome')
   lancarSeErro(error, 'Falha ao listar opções')
   return (data ?? []) as Opcao[]
+}
+
+/** Modelo de mensagem avulso (sem passo), usado no botão de WhatsApp do lead. */
+export async function obterModeloAvulso(db: SupabaseClient): Promise<ModeloMensagem | null> {
+  const { data, error } = await db.from('modelos_mensagem').select('*').is('passo', null).limit(1)
+  lancarSeErro(error, 'Falha ao ler modelo de mensagem')
+  return ((data ?? [])[0] as ModeloMensagem | undefined) ?? null
 }

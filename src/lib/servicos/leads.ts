@@ -30,6 +30,7 @@ function colunas(dados: Partial<DadosLead>): Record<string, unknown> {
     cidade: dados.cidade,
     nicho_id: dados.nichoId,
     origem_id: dados.origemId,
+    link_mvp: dados.linkMvp,
     observacoes: dados.observacoes,
   }
   return Object.fromEntries(Object.entries(mapa).filter(([, v]) => v !== undefined))
@@ -114,7 +115,30 @@ export async function listarLeads(db: SupabaseClient, filtros: FiltrosLeads): Pr
   }
   const { data, error } = await q
   lancarSeErro(error, 'Falha ao listar leads')
-  return (data ?? []) as LeadResumo[]
+  const leads = (data ?? []) as Lead[]
+  if (leads.length === 0) return []
+
+  // Uma única consulta traz todos os retornos pendentes (ordenados por data); o primeiro de cada lead é o próximo.
+  const { data: pendentes, error: e2 } = await db
+    .from('retornos')
+    .select('lead_id, data_prevista')
+    .eq('status', 'pendente')
+    .order('data_prevista')
+  lancarSeErro(e2, 'Falha ao ler próximos retornos')
+  const proximo = new Map<string, string>()
+  for (const r of (pendentes ?? []) as { lead_id: string; data_prevista: string }[]) {
+    if (!proximo.has(r.lead_id)) proximo.set(r.lead_id, r.data_prevista)
+  }
+  return leads.map((l) => ({ ...l, proximo_retorno: proximo.get(l.id) ?? null }))
+}
+
+/** Lead com este WhatsApp (aceita qualquer formato), ou null. */
+export async function obterLeadPorWhatsapp(db: SupabaseClient, whatsapp: string): Promise<Lead | null> {
+  const n = normalizarTelefone(whatsapp)
+  if (!n) return null
+  const { data, error } = await db.from('leads').select('*').eq('whatsapp', n).maybeSingle()
+  lancarSeErro(error, 'Falha ao buscar lead')
+  return (data as Lead | null) ?? null
 }
 
 export async function obterLead(db: SupabaseClient, id: string): Promise<LeadDetalhe> {

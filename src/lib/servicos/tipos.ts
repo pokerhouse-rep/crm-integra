@@ -40,7 +40,10 @@ export interface Lead {
   updated_at: string
 }
 
-export type LeadResumo = Lead
+/** Lead da lista, com a data do próximo retorno pendente (null se não houver). */
+export interface LeadResumo extends Lead {
+  proximo_retorno: DataISO | null
+}
 
 export interface DadosLead {
   nomeContato: string
@@ -50,6 +53,7 @@ export interface DadosLead {
   cidade?: string | null
   nichoId?: string | null
   origemId?: string | null
+  linkMvp?: string | null
   observacoes?: string | null
 }
 

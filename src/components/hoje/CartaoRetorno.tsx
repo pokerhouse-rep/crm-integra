@@ -148,12 +148,13 @@ export function CartaoRetorno({ dados, hoje, motivos }: Props) {
         <DialogoMotivoPerda
           motivos={motivos}
           pendente={pendente}
+          erro={erro ?? undefined}
           onConfirmar={(id) => registrar('sem_interesse', undefined, id)}
           onCancelar={() => setPainel(null)}
         />
       )}
 
-      {erro && (
+      {erro && painel !== 'motivo' && (
         <p role="alert" className="mt-3 rounded-lg bg-laranja/10 p-2 text-sm text-laranja">
           {erro}
         </p>

@@ -59,3 +59,16 @@ export async function excluirTarefa(db: SupabaseClient, id: string): Promise<voi
   const { error } = await db.from('tarefas').delete().eq('id', id)
   lancarSeErro(error, 'Falha ao excluir tarefa')
 }
+
+/** Tarefas pendentes do lead, da mais próxima para a mais distante. */
+export async function listarTarefasDoLead(db: SupabaseClient, leadId: string): Promise<Tarefa[]> {
+  const { data, error } = await db
+    .from('tarefas')
+    .select('*')
+    .eq('lead_id', leadId)
+    .eq('feita', false)
+    .order('data')
+    .order('hora', { nullsFirst: false })
+  lancarSeErro(error, 'Falha ao listar tarefas do lead')
+  return (data ?? []) as Tarefa[]
+}

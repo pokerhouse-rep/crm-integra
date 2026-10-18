@@ -1,0 +1,206 @@
+'use server'
+
+import { revalidatePath } from 'next/cache'
+import { redirect } from 'next/navigation'
+import { hojeEmPalmas, type DataISO } from '@/lib/dominio/datas'
+import { ETAPAS, type Etapa } from '@/lib/dominio/tipos'
+import { criarClienteServidor } from '@/lib/supabase/server'
+import { adicionarAnotacao, atualizarLead, criarLead, obterLeadPorWhatsapp } from '@/lib/servicos/leads'
+import {
+  adicionarRetorno,
+  alterarDataRetorno,
+  aplicarSequencia,
+  cancelarRetorno,
+  marcarMvpEnviado,
+  moverEtapa,
+} from '@/lib/servicos/retornos'
+import { concluirTarefa, criarTarefa } from '@/lib/servicos/tarefas'
+import { ErroNegocio, type DadosLead, type SupabaseClient } from '@/lib/servicos/tipos'
+
+export type RespostaAcao = { erro?: string }
+
+export interface ValoresLead {
+  nomeContato: string
+  whatsapp: string
+  empresa: string
+  email: string
+  cidade: string
+  nichoId: string
+  origemId: string
+  linkMvp: string
+  observacoes: string
+}
+
+export type CampoLead = keyof ValoresLead
+
+export interface RespostaSalvarLead {
+  erro?: string
+  campo?: CampoLead
+  /** Lead que já usa o WhatsApp informado (para linkar no aviso de duplicado). */
+  leadExistenteId?: string
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const DATA_ISO = /^\d{4}-\d{2}-\d{2}$/
+const HORA = /^\d{2}:\d{2}$/
+
+function dataValida(d: string): boolean {
+  if (!DATA_ISO.test(d)) return false
+  const x = new Date(`${d}T00:00:00Z`)
+  return !Number.isNaN(x.getTime()) && x.toISOString().slice(0, 10) === d
+}
+
+function linkValido(l: string): boolean {
+  try {
+    const u = new URL(l)
+    return u.protocol === 'http:' || u.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+function vazioParaNulo(v: string): string | null {
+  const t = v.trim()
+  return t === '' ? null : t
+}
+
+function revalidarLead(leadId?: string) {
+  revalidatePath('/leads')
+  revalidatePath('/hoje')
+  revalidatePath('/agenda')
+  revalidatePath('/funil')
+  if (leadId) revalidatePath(`/leads/${leadId}`)
+}
+
+async function executar(leadId: string, fn: (db: SupabaseClient) => Promise<void>): Promise<RespostaAcao> {
+  if (!UUID.test(leadId)) return { erro: 'Lead inválido.' }
+  try {
+    await fn(await criarClienteServidor())
+  } catch (e) {
+    if (e instanceof ErroNegocio) {
+      revalidarLead(leadId) // o estado pode ter mudado (ex.: toque duplo)
+      return { erro: e.message }
+    }
+    throw e
+  }
+  revalidarLead(leadId)
+  return {}
+}
+
+function campoDoErro(mensagem: string): CampoLead | undefined {
+  if (/whatsapp/i.test(mensagem)) return 'whatsapp'
+  return undefined
+}
+
+/** Cria (leadId ausente) ou atualiza o lead; em caso de sucesso vai para o detalhe. */
+export async function acaoSalvarLead(leadId: string | null, v: ValoresLead): Promise<RespostaSalvarLead> {
+  if (leadId !== null && !UUID.test(leadId)) return { erro: 'Lead inválido.' }
+  const nomeContato = v.nomeContato.trim()
+  if (!nomeContato) return { erro: 'Informe o nome do contato.', campo: 'nomeContato' }
+  if (!v.whatsapp.trim()) return { erro: 'Informe o WhatsApp.', campo: 'whatsapp' }
+  const email = vazioParaNulo(v.email)
+  if (email && !/^\S+@\S+\.\S+$/.test(email)) return { erro: 'E-mail inválido.', campo: 'email' }
+  const linkMvp = vazioParaNulo(v.linkMvp)
+  if (linkMvp && !linkValido(linkMvp)) {
+    return { erro: 'Link inválido. Use um endereço começando com http:// ou https://.', campo: 'linkMvp' }
+  }
+  const nichoId = vazioParaNulo(v.nichoId)
+  const origemId = vazioParaNulo(v.origemId)
+  if ((nichoId && !UUID.test(nichoId)) || (origemId && !UUID.test(origemId))) return { erro: 'Opção inválida.' }
+
+  const dados: DadosLead = {
+    nomeContato,
+    whatsapp: v.whatsapp,
+    empresa: vazioParaNulo(v.empresa),
+    email,
+    cidade: vazioParaNulo(v.cidade),
+    nichoId,
+    origemId,
+    linkMvp,
+    observacoes: vazioParaNulo(v.observacoes),
+  }
+
+  const db = await criarClienteServidor()
+  let id: string
+  try {
+    if (leadId) {
+      id = (await atualizarLead(db, leadId, dados)).id
+    } else {
+      id = (await criarLead(db, dados)).id
+    }
+  } catch (e) {
+    if (!(e instanceof ErroNegocio)) throw e
+    const duplicado = e.message.startsWith('Já existe um lead')
+    let existente: string | undefined
+    if (duplicado) {
+      const l = await obterLeadPorWhatsapp(db, v.whatsapp)
+      if (l && l.id !== leadId) existente = l.id
+    }
+    return { erro: e.message, campo: campoDoErro(e.message), leadExistenteId: existente }
+  }
+  revalidarLead(id)
+  redirect(`/leads/${id}`)
+}
+
+export async function acaoMoverEtapa(leadId: string, etapa: Etapa, motivoPerdaId?: string): Promise<RespostaAcao> {
+  if (!ETAPAS.some((e) => e.valor === etapa)) return { erro: 'Etapa inválida.' }
+  if (motivoPerdaId !== undefined && !UUID.test(motivoPerdaId)) return { erro: 'Motivo inválido.' }
+  return executar(leadId, (db) => moverEtapa(db, leadId, etapa, motivoPerdaId))
+}
+
+export async function acaoMarcarMvpEnviado(leadId: string, link: string): Promise<RespostaAcao> {
+  const l = link.trim()
+  if (l && !linkValido(l)) return { erro: 'Link inválido. Use um endereço começando com http:// ou https://.' }
+  return executar(leadId, (db) => marcarMvpEnviado(db, leadId, { link: l || undefined, hoje: hojeEmPalmas() }))
+}
+
+export async function acaoAlterarDataRetorno(leadId: string, retornoId: string, data: DataISO): Promise<RespostaAcao> {
+  if (!UUID.test(retornoId)) return { erro: 'Retorno inválido.' }
+  if (!dataValida(data)) return { erro: 'Data inválida.' }
+  return executar(leadId, (db) => alterarDataRetorno(db, retornoId, data))
+}
+
+export async function acaoCancelarRetorno(leadId: string, retornoId: string): Promise<RespostaAcao> {
+  if (!UUID.test(retornoId)) return { erro: 'Retorno inválido.' }
+  return executar(leadId, (db) => cancelarRetorno(db, retornoId))
+}
+
+export async function acaoAdicionarRetorno(leadId: string, data: DataISO): Promise<RespostaAcao> {
+  if (!dataValida(data)) return { erro: 'Data inválida.' }
+  return executar(leadId, (db) => adicionarRetorno(db, leadId, data))
+}
+
+/** Troca os retornos pendentes por uma nova sequência (ex.: "3, 7, 15"), contada a partir de hoje. */
+export async function acaoTrocarSequencia(leadId: string, texto: string): Promise<RespostaAcao> {
+  const partes = texto.split(/[\s,;]+/).filter(Boolean)
+  const offsets = partes.map((p) => (/^\d{1,3}$/.test(p) ? Number(p) : NaN))
+  if (offsets.length === 0 || offsets.some((o) => !Number.isInteger(o) || o < 1)) {
+    return { erro: 'Informe os dias separados por vírgula, por exemplo: 3, 7, 15.' }
+  }
+  if (offsets.length > 10) return { erro: 'Use no máximo 10 retornos.' }
+  return executar(leadId, (db) => aplicarSequencia(db, leadId, offsets, hojeEmPalmas()))
+}
+
+export async function acaoAdicionarAnotacao(leadId: string, texto: string): Promise<RespostaAcao> {
+  const t = texto.trim()
+  if (!t) return { erro: 'Escreva a anotação.' }
+  return executar(leadId, (db) => adicionarAnotacao(db, leadId, t))
+}
+
+export async function acaoCriarTarefa(
+  leadId: string,
+  titulo: string,
+  data: DataISO,
+  hora: string,
+): Promise<RespostaAcao> {
+  if (!dataValida(data)) return { erro: 'Data inválida.' }
+  if (hora && !HORA.test(hora)) return { erro: 'Hora inválida.' }
+  return executar(leadId, async (db) => {
+    await criarTarefa(db, { titulo, data, hora: hora || null, leadId })
+  })
+}
+
+export async function acaoConcluirTarefaDoLead(leadId: string, tarefaId: string): Promise<RespostaAcao> {
+  if (!UUID.test(tarefaId)) return { erro: 'Tarefa inválida.' }
+  return executar(leadId, (db) => concluirTarefa(db, tarefaId))
+}
