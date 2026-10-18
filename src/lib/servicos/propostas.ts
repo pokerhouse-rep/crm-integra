@@ -1,0 +1,185 @@
+import { agendarPrazo, type DataISO } from '@/lib/dominio/datas'
+import { totaisProposta, validarItem, valorLiquido, type ItemProposta } from '@/lib/dominio/propostas'
+import { obterConfig } from './config'
+import { chamarRpc } from './rpc'
+import {
+  ErroNegocio,
+  lancarSeErro,
+  type ItemPropostaRow,
+  type Lead,
+  type Proposta,
+  type SupabaseClient,
+  type VersaoProposta,
+} from './tipos'
+
+export interface PropostaDetalhe {
+  proposta: Proposta
+  lead: Lead
+  versoes: (VersaoProposta & { itens: ItemProposta[] })[]
+}
+
+export type PropostaResumo = Proposta & {
+  versaoAtual: number
+  totalUnicoCentavos: number
+  totalRecorrenteCentavos: number
+}
+
+export async function criarProposta(db: SupabaseClient, leadId: string, titulo?: string): Promise<string> {
+  return chamarRpc<string>(db, 'criar_proposta', { p_lead_id: leadId, p_titulo: titulo ?? null }, 'Falha ao criar proposta')
+}
+
+function normalizarItem(item: ItemProposta): ItemProposta {
+  return {
+    ...item,
+    descricao: item.descricao.trim(),
+    parcelas: item.tipo === 'unico' ? item.parcelas : 1,
+    mesInicio: item.tipo === 'recorrente' ? item.mesInicio : null,
+  }
+}
+
+export async function salvarItens(db: SupabaseClient, propostaId: string, itens: ItemProposta[]): Promise<void> {
+  const normalizados = itens.map(normalizarItem)
+  normalizados.forEach((item, i) => {
+    const n = i + 1
+    if (item.desconto && !Number.isInteger(item.desconto.valor)) throw new ErroNegocio(`Item ${n}: Desconto inválido.`)
+    const erro = validarItem(item)
+    if (erro) throw new ErroNegocio(`Item ${n}: ${erro}`)
+    if (item.tipo === 'unico' && valorLiquido(item) < item.parcelas) {
+      throw new ErroNegocio(`Item ${n}: O valor é baixo demais para esse número de parcelas.`)
+    }
+  })
+  const totais = totaisProposta(normalizados)
+  await chamarRpc(
+    db,
+    'salvar_itens_versao',
+    {
+      p_proposta_id: propostaId,
+      p_itens: normalizados.map((i) => ({
+        servico_id: i.servicoId,
+        descricao: i.descricao,
+        tipo: i.tipo,
+        valor_centavos: i.valorCentavos,
+        parcelas: i.parcelas,
+        mes_inicio: i.mesInicio,
+        desconto_tipo: i.desconto?.tipo ?? null,
+        desconto_valor: i.desconto?.valor ?? null,
+      })),
+      p_total_unico: totais.unicoCentavos,
+      p_total_recorrente: totais.recorrenteCentavos,
+    },
+    'Falha ao salvar itens da proposta',
+  )
+}
+
+export async function novaVersao(db: SupabaseClient, propostaId: string): Promise<number> {
+  return chamarRpc<number>(db, 'nova_versao', { p_proposta_id: propostaId }, 'Falha ao criar nova versão')
+}
+
+export async function enviarProposta(db: SupabaseClient, propostaId: string, hoje: DataISO): Promise<void> {
+  const config = await obterConfig(db)
+  await chamarRpc(
+    db,
+    'enviar_proposta',
+    { p_proposta_id: propostaId, p_data_retorno: agendarPrazo(hoje, config.diasRetornoProposta) },
+    'Falha ao enviar proposta',
+  )
+}
+
+export async function recusarProposta(db: SupabaseClient, propostaId: string): Promise<void> {
+  await chamarRpc(db, 'recusar_proposta', { p_proposta_id: propostaId }, 'Falha ao recusar proposta')
+}
+
+function paraItemDominio(r: ItemPropostaRow): ItemProposta {
+  return {
+    servicoId: r.servico_id,
+    descricao: r.descricao,
+    tipo: r.tipo,
+    valorCentavos: Number(r.valor_centavos),
+    parcelas: r.parcelas,
+    mesInicio: r.mes_inicio,
+    desconto:
+      r.desconto_tipo && r.desconto_valor !== null ? { tipo: r.desconto_tipo, valor: Number(r.desconto_valor) } : null,
+  }
+}
+
+export async function obterProposta(db: SupabaseClient, id: string): Promise<PropostaDetalhe> {
+  const { data: proposta, error } = await db.from('propostas').select('*').eq('id', id).maybeSingle()
+  lancarSeErro(error, 'Falha ao ler proposta')
+  if (!proposta) throw new ErroNegocio('Proposta não encontrada.')
+
+  const { data: lead, error: e2 } = await db.from('leads').select('*').eq('id', proposta.lead_id).maybeSingle()
+  lancarSeErro(e2, 'Falha ao ler lead')
+  if (!lead) throw new ErroNegocio('Lead não encontrado.')
+
+  const { data: versoes, error: e3 } = await db
+    .from('versoes_proposta')
+    .select('*')
+    .eq('proposta_id', id)
+    .order('numero', { ascending: false })
+  lancarSeErro(e3, 'Falha ao ler versões')
+
+  const ids = (versoes ?? []).map((v) => v.id as string)
+  const { data: itens, error: e4 } = ids.length
+    ? await db.from('itens_proposta').select('*').in('versao_id', ids).order('ordem')
+    : { data: [], error: null }
+  lancarSeErro(e4, 'Falha ao ler itens')
+
+  return {
+    proposta: proposta as Proposta,
+    lead: lead as Lead,
+    versoes: ((versoes ?? []) as VersaoProposta[]).map((v) => ({
+      ...v,
+      total_unico_centavos: Number(v.total_unico_centavos),
+      total_recorrente_centavos: Number(v.total_recorrente_centavos),
+      itens: ((itens ?? []) as ItemPropostaRow[]).filter((i) => i.versao_id === v.id).map(paraItemDominio),
+    })),
+  }
+}
+
+export async function listarPropostasDoLead(db: SupabaseClient, leadId: string): Promise<PropostaResumo[]> {
+  const { data, error } = await db
+    .from('propostas')
+    .select('*, versoes_proposta(numero, total_unico_centavos, total_recorrente_centavos)')
+    .eq('lead_id', leadId)
+    .order('created_at', { ascending: false })
+    .order('id')
+  lancarSeErro(error, 'Falha ao listar propostas')
+  return (data ?? []).map((p) => {
+    const { versoes_proposta: versoes, ...proposta } = p as Proposta & {
+      versoes_proposta: { numero: number; total_unico_centavos: number; total_recorrente_centavos: number }[]
+    }
+    const ultima = [...versoes].sort((a, b) => b.numero - a.numero)[0]
+    return {
+      ...proposta,
+      versaoAtual: ultima?.numero ?? 1,
+      totalUnicoCentavos: Number(ultima?.total_unico_centavos ?? 0),
+      totalRecorrenteCentavos: Number(ultima?.total_recorrente_centavos ?? 0),
+    }
+  })
+}
+
+/** P12: soma da última versão das propostas em rascunho ou enviadas, por lead; leads perdidos não somam. */
+export async function valoresAbertosPorLead(
+  db: SupabaseClient,
+): Promise<Record<string, { unicoCentavos: number; recorrenteCentavos: number }>> {
+  const { data, error } = await db
+    .from('propostas')
+    .select(
+      'lead_id, leads!inner(etapa), versoes_proposta(numero, total_unico_centavos, total_recorrente_centavos)',
+    )
+    .in('status', ['rascunho', 'enviada'])
+    .neq('leads.etapa', 'perdido')
+  lancarSeErro(error, 'Falha ao ler valores em negociação')
+  const saida: Record<string, { unicoCentavos: number; recorrenteCentavos: number }> = {}
+  for (const p of (data ?? []) as unknown as {
+    lead_id: string
+    versoes_proposta: { numero: number; total_unico_centavos: number; total_recorrente_centavos: number }[]
+  }[]) {
+    const ultima = [...p.versoes_proposta].sort((a, b) => b.numero - a.numero)[0]
+    if (!ultima) continue
+    const atual = (saida[p.lead_id] ??= { unicoCentavos: 0, recorrenteCentavos: 0 })
+    atual.unicoCentavos += Number(ultima.total_unico_centavos)
+    atual.recorrenteCentavos += Number(ultima.total_recorrente_centavos)
+  }
+  return saida
+}
