@@ -235,6 +235,9 @@ begin
   end if;
   perform 1 from public.leads where id = v_lead_id for update;
   select * into v_contrato from public.contratos where id = p_contrato_id for update;
+  if not found then
+    raise exception 'Contrato não encontrado.' using errcode = 'P0001';
+  end if;
   if v_contrato.status = 'cancelado' then
     raise exception 'Contrato cancelado não pode ser alterado.' using errcode = 'P0001';
   end if;
@@ -310,6 +313,14 @@ begin
   v_contrato := public.travar_contrato(p_contrato_id);
   if p_hoje is null then
     raise exception 'Informe a data.' using errcode = 'P0001';
+  end if;
+
+  if v_contrato.status = 'pausado' then
+    -- Parcelas e à vista suspensas já vencidas continuam devidas; mensalidades dos meses pausados não são cobradas.
+    update public.cobrancas set status = 'aberta'
+    where contrato_id = p_contrato_id and status = 'suspensa' and tipo <> 'mensalidade' and vencimento < p_hoje;
+    delete from public.cobrancas
+    where contrato_id = p_contrato_id and status = 'suspensa' and tipo = 'mensalidade' and vencimento < p_hoje;
   end if;
 
   delete from public.cobrancas

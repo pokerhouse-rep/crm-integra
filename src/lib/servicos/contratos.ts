@@ -35,7 +35,7 @@ function paraResumo(l: LinhaContrato, hoje: DataISO): { resumo: ContratoResumo; 
     const normalizados = rs.map((r) => ({ ...r, valor_centavos: Number(r.valor_centavos) }))
     reajustes.push(...normalizados)
     const base = Number(item.valor_centavos)
-    if (c.status === 'ativo' && item.tipo === 'recorrente') {
+    if (c.status === 'ativo' && item.tipo === 'recorrente' && !!item.mes_inicio && item.mes_inicio <= competencia) {
       mensalidade += valorVigente(
         base,
         normalizados.map((r) => ({ aPartirDe: r.a_partir_de, valorCentavos: r.valor_centavos })),

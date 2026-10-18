@@ -128,6 +128,51 @@ describe('ciclo de vida do contrato', () => {
     // Segundo reajuste no mesmo mês substitui o primeiro.
     await reajustarMensalidade(cliente, itemId, { valorCentavos: 19000, aPartirDe: '2027-01-01' })
     expect((await obterContrato(cliente, contratoId, '2027-01-10')).reajustes).toHaveLength(1)
+    const jan = (await todas(cliente)).find((c) => c.competencia === '2027-01-01')!
+    expect(Number(jan.valor_centavos)).toBe(19000)
+  })
+
+  it('cancelar contrato pausado reabre parcela vencida, descarta mensalidade pausada e apaga o futuro', async () => {
+    const { cliente } = await criarUsuarioTeste()
+    const { contratoId } = await criarClienteComContrato(cliente)
+    await pausarContrato(cliente, contratoId, '2026-11-01')
+    await cancelarContrato(cliente, contratoId, '2026-12-01')
+    const resto = await todas(cliente)
+    expect(resumo(resto)).toEqual(['p1:aberta', 'p2:aberta'])
+    expect(resto.find((c) => c.numero === 2)!.vencimento).toBe('2026-11-19')
+  })
+
+  it('MRR só conta item com mês de início já chegado', async () => {
+    const { cliente } = await criarUsuarioTeste()
+    await criarClienteComContrato(cliente)
+    expect(mrrAtivo(await listarContratos(cliente, '2026-10-25'))).toBe(0)
+    expect(mrrAtivo(await listarContratos(cliente, '2026-11-05'))).toBe(15000)
+  })
+
+  it('reajuste com data que não é dia 1 falha', async () => {
+    const { cliente } = await criarUsuarioTeste()
+    const { contratoId } = await criarClienteComContrato(cliente)
+    const itemId = await itemDoTipo(cliente, contratoId, 'recorrente')
+    await expect(reajustarMensalidade(cliente, itemId, { valorCentavos: 18000, aPartirDe: '2027-01-15' })).rejects.toThrow(
+      'Informe o mês do reajuste.',
+    )
+  })
+
+  it('reajuste vale só até o próximo reajuste do mesmo item', async () => {
+    const { cliente } = await criarUsuarioTeste()
+    const { contratoId } = await criarClienteComContrato(cliente)
+    await garantirMensalidades(cliente, '2027-02-10')
+    const itemId = await itemDoTipo(cliente, contratoId, 'recorrente')
+    await reajustarMensalidade(cliente, itemId, { valorCentavos: 21000, aPartirDe: '2027-03-01' })
+    await reajustarMensalidade(cliente, itemId, { valorCentavos: 19000, aPartirDe: '2027-01-01' })
+    const mens = (await todas(cliente)).filter((c) => c.tipo === 'mensalidade')
+    expect(mens.map((c) => [c.competencia, Number(c.valor_centavos)])).toEqual([
+      ['2026-11-01', 15000],
+      ['2026-12-01', 15000],
+      ['2027-01-01', 19000],
+      ['2027-02-01', 19000],
+      ['2027-03-01', 21000],
+    ])
   })
 
   it('reajustar item de valor único falha', async () => {
