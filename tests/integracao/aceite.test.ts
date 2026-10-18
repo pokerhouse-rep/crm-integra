@@ -12,6 +12,7 @@ import {
   recusarProposta,
   salvarItens,
 } from '@/lib/servicos/propostas'
+import { chamarRpc } from '@/lib/servicos/rpc'
 import type { ItemProposta } from '@/lib/dominio/propostas'
 
 const site: ItemProposta = {
@@ -40,6 +41,14 @@ async function cobrancasDoContrato(cliente: SupabaseClient, contratoId: string) 
     .order('tipo')
   if (error) throw new Error(error.message)
   return data!
+}
+
+function argsRpc(propostaId: string, versaoId: string) {
+  return {
+    p_proposta_id: propostaId, p_versao_id: versaoId, p_descricao: 'X', p_dia_vencimento: 19, p_data_inicio: '2026-10-19',
+    p_itens: [{ descricao: 'Site', tipo: 'unico', valor_centavos: 150000, parcelas: 1, mes_inicio: null }],
+    p_cobrancas: [] as unknown[],
+  }
 }
 
 const pendentes = (det: Awaited<ReturnType<typeof obterLead>>) => det.retornos.filter((r) => r.status === 'pendente')
@@ -196,6 +205,39 @@ describe('aceite da proposta', () => {
     const lead = await criarLead(cliente, { nomeContato: 'Ana', whatsapp: '(63) 96666-0003' })
     const id = await criarProposta(cliente, lead.id)
     await expect(aceitarProposta(cliente, id, { hoje: '2026-10-19' })).rejects.toThrow('A proposta não tem itens.')
+  })
+
+  it('versão desatualizada: aceitar com o id da v1 depois de criar a v2 falha', async () => {
+    const { cliente } = await criarUsuarioTeste()
+    const { id } = await propostaEnviada(cliente)
+    const v1 = (await obterProposta(cliente, id)).versoes[0].id
+    await novaVersao(cliente, id)
+    await expect(chamarRpc(cliente, 'aceitar_proposta', { ...argsRpc(id, v1) }, 'x')).rejects.toThrow(
+      'A proposta mudou. Atualize a página e tente de novo.',
+    )
+    expect((await obterProposta(cliente, id)).proposta.status).toBe('rascunho')
+  })
+
+  it('quantidade de itens diferente da versão atual falha', async () => {
+    const { cliente } = await criarUsuarioTeste()
+    const { id } = await propostaEnviada(cliente)
+    const v = (await obterProposta(cliente, id)).versoes[0].id
+    await expect(chamarRpc(cliente, 'aceitar_proposta', { ...argsRpc(id, v) }, 'x')).rejects.toThrow(
+      'A proposta mudou. Atualize a página e tente de novo.',
+    )
+  })
+
+  it('descrição em branco e índice de cobrança fora do intervalo são rejeitados', async () => {
+    const { cliente } = await criarUsuarioTeste()
+    const { id } = await propostaEnviada(cliente, [site])
+    const v = (await obterProposta(cliente, id)).versoes[0].id
+    await expect(chamarRpc(cliente, 'aceitar_proposta', { ...argsRpc(id, v), p_descricao: '  ' }, 'x')).rejects.toThrow(
+      'Informe a descrição do contrato.',
+    )
+    const cobranca = { item_indice: 5, tipo: 'avista', numero: null, total_parcelas: null, competencia: null, vencimento: '2026-10-19', valor_centavos: 150000 }
+    await expect(
+      chamarRpc(cliente, 'aceitar_proposta', { ...argsRpc(id, v), p_cobrancas: [cobranca] }, 'x'),
+    ).rejects.toThrow('Dados do aceite inválidos.')
   })
 
   it('usuário não aceita proposta de outro', async () => {
