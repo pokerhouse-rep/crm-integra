@@ -8,6 +8,7 @@ import {
   listarOpcoes,
   listarTodasOpcoes,
   obterConfig,
+  obterModeloAvulso,
   salvarConfig,
   salvarModelo,
   salvarOpcao,
@@ -81,6 +82,12 @@ describe('configurações', () => {
     await expect(salvarModelo(cliente, { nome: 'Outro', texto: 'x', passo: 0 })).rejects.toBeInstanceOf(ErroNegocio)
     await expect(salvarModelo(cliente, { nome: ' ', texto: 'x', passo: null })).rejects.toBeInstanceOf(ErroNegocio)
     await expect(salvarModelo(cliente, { nome: 'Z', texto: ' ', passo: null })).rejects.toBeInstanceOf(ErroNegocio)
+    const avulso = padrao.find((m) => m.passo === null)!
+    await expect(salvarModelo(cliente, { nome: 'Outro avulso', texto: 'x', passo: null })).rejects.toThrow(
+      'Já existe um modelo avulso.',
+    )
+    await salvarModelo(cliente, { id: avulso.id, nome: avulso.nome, texto: 'Oi {nome}!', passo: null })
+    expect((await obterModeloAvulso(cliente))?.id).toBe(avulso.id)
     const novo = await salvarModelo(cliente, { nome: 'Extra', texto: 'Oi {nome}', passo: 4 })
     await excluirModelo(cliente, novo.id)
     expect((await listarModelos(cliente)).some((m) => m.id === novo.id)).toBe(false)

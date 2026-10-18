@@ -76,7 +76,10 @@ async function carregarItens(db: SupabaseClient, de: DataISO | null, ate: DataIS
   }
 
   const porPasso = modelos.filter((m) => m.passo !== null).sort((a, b) => a.passo! - b.passo!)
-  const avulso = modelos.find((m) => m.passo === null) ?? null
+  const avulso =
+    modelos
+      .filter((m) => m.passo === null)
+      .sort((a, b) => a.nome.localeCompare(b.nome) || a.id.localeCompare(b.id))[0] ?? null
 
   const itens: ItemAgenda[] = []
   for (const r of retornos) {

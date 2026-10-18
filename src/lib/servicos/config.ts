@@ -40,7 +40,7 @@ export async function listarOpcoes(
 
 /** Modelo de mensagem avulso (sem passo), usado no botão de WhatsApp do lead. */
 export async function obterModeloAvulso(db: SupabaseClient): Promise<ModeloMensagem | null> {
-  const { data, error } = await db.from('modelos_mensagem').select('*').is('passo', null).limit(1)
+  const { data, error } = await db.from('modelos_mensagem').select('*').is('passo', null).order('nome').order('id').limit(1)
   lancarSeErro(error, 'Falha ao ler modelo de mensagem')
   return ((data ?? [])[0] as ModeloMensagem | undefined) ?? null
 }
@@ -125,12 +125,13 @@ export async function salvarModelo(
   if (passo !== null && !inteiroEntre(passo, 1, 365)) {
     throw new ErroNegocio('O passo deve ser um número inteiro positivo ou ficar vazio.')
   }
-  if (passo !== null) {
-    let q = db.from('modelos_mensagem').select('id').eq('passo', passo)
-    if (entrada.id) q = q.neq('id', entrada.id)
-    const { data, error } = await q.limit(1)
-    lancarSeErro(error, 'Falha ao validar modelo')
-    if ((data ?? []).length > 0) throw new ErroNegocio(`Já existe um modelo para o passo ${passo}.`)
+  let q = db.from('modelos_mensagem').select('id')
+  q = passo !== null ? q.eq('passo', passo) : q.is('passo', null)
+  if (entrada.id) q = q.neq('id', entrada.id)
+  const { data: existentes, error: erroValidacao } = await q.limit(1)
+  lancarSeErro(erroValidacao, 'Falha ao validar modelo')
+  if ((existentes ?? []).length > 0) {
+    throw new ErroNegocio(passo !== null ? `Já existe um modelo para o passo ${passo}.` : 'Já existe um modelo avulso.')
   }
   const query = entrada.id
     ? db.from('modelos_mensagem').update({ nome, texto, passo }).eq('id', entrada.id)

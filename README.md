@@ -17,3 +17,9 @@ CRM pessoal (Next.js + Supabase local). Desenvolvimento apenas local.
 - `npm test` - testes unitarios.
 - `npm run test:int` - testes de integracao (exigem o Supabase local no ar e `.env.test.local`).
 - `npm run db:reset` recria o banco local a partir das migrations.
+
+## Celular e rede local
+
+- Com o PC e o celular no mesmo Wi-Fi, abra `http://<ip-do-pc>:3000` no navegador do celular (descubra o IP com `ipconfig`, campo "Endereco IPv4"). Rode o app com `npm run dev -- -H 0.0.0.0` se ele nao responder por fora do PC.
+- Se nao abrir, o Firewall do Windows provavelmente esta bloqueando a porta 3000. Isso e decisao do dono; o projeto nao altera o firewall. Para liberar por conta propria: PowerShell **como administrador**, `New-NetFirewallRule -DisplayName "CRM Integra dev 3000" -Direction Inbound -Protocol TCP -LocalPort 3000 -Action Allow -Profile Private`. Para desfazer: `Remove-NetFirewallRule -DisplayName "CRM Integra dev 3000"`.
+- PWA: ha manifest e icones (gerados da logo com `python -I scripts/gerar-icones.py`), mas nao ha service worker nem cache offline. A instalacao como app no celular exige HTTPS fora de `localhost`; na rede local o celular usa o app pelo navegador normalmente. A instalacao completa vem quando o dono autorizar a hospedagem.
