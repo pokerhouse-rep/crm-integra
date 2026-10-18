@@ -59,8 +59,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
   const nicho = nichos.find((n) => n.id === lead.nicho_id)?.nome
   const origem = origens.find((o) => o.id === lead.origem_id)?.nome
   const motivoPerda = motivos.find((m) => m.id === lead.motivo_perda_id)?.nome
-  const ativo = lead.etapa !== 'fechado' && lead.etapa !== 'perdido'
-  const mostrarMvp = ativo && (lead.etapa === 'prospect' || pendentes.length === 0)
+  const mostrarMvp = (lead.etapa === 'prospect' || lead.etapa === 'mvp_enviado') && pendentes.length === 0
   const detalhes = [lead.empresa, nicho, lead.cidade].filter(Boolean).join(' · ')
 
   return (

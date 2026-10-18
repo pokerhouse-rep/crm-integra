@@ -1,3 +1,4 @@
+import { erroSequencia } from '@/lib/validacao'
 import { ErroNegocio, lancarSeErro, type Config, type ModeloMensagem, type Opcao, type SupabaseClient } from './tipos'
 
 export async function obterConfig(db: SupabaseClient): Promise<Config> {
@@ -62,13 +63,8 @@ export async function salvarConfig(db: SupabaseClient, parcial: Partial<Config>)
   const campos: Record<string, unknown> = {}
   if (parcial.sequenciaPadrao !== undefined) {
     const seq = parcial.sequenciaPadrao
-    if (seq.length === 0) throw new ErroNegocio('A sequência de retornos precisa ter ao menos um prazo.')
-    if (!seq.every((n) => inteiroEntre(n, 1, 365))) {
-      throw new ErroNegocio('Os prazos da sequência devem ser números inteiros positivos (1 a 365 dias).')
-    }
-    if (!seq.every((n, i) => i === 0 || n > seq[i - 1])) {
-      throw new ErroNegocio('Os prazos da sequência devem estar em ordem crescente, sem repetir.')
-    }
+    const erro = erroSequencia(seq)
+    if (erro) throw new ErroNegocio(erro)
     campos.sequencia_padrao = seq
   }
   const dias: [keyof Config, string, string][] = [

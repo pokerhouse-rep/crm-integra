@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { criarUsuarioTeste } from './helpers'
 import { criarLead, obterLead } from '@/lib/servicos/leads'
+import { agendaDoDia } from '@/lib/servicos/agenda'
 import {
   adicionarRetorno,
   alterarDataRetorno,
@@ -235,5 +236,71 @@ describe('serviço de retornos', () => {
     const pend = depois.retornos.filter((r) => r.status === 'pendente')
     expect(pend.map((r) => r.data_prevista).sort()).toEqual(['2026-11-03', '2026-11-09'])
     expect(pend.every((r) => r.ciclo === 2)).toBe(true)
+  })
+  it('re-marcar MVP num lead mvp_enviado sem pendentes cria ciclo 2 (passo 1 de 3)', async () => {
+    const { cliente } = await criarUsuarioTeste()
+    const lead = await novoLead(cliente)
+    await marcarMvpEnviado(cliente, lead.id, { hoje: '2026-10-19' })
+    for (const r of (await obterLead(cliente, lead.id)).retornos) await cancelarRetorno(cliente, r.id)
+    await marcarMvpEnviado(cliente, lead.id, { hoje: '2026-11-02' })
+    const det = await obterLead(cliente, lead.id)
+    expect(det.lead.etapa).toBe('mvp_enviado')
+    const pend = det.retornos.filter((r) => r.status === 'pendente')
+    expect(pend).toHaveLength(3)
+    expect(pend.every((r) => r.ciclo === 2 && r.origem === 'sequencia')).toBe(true)
+    const ag = await agendaDoDia(cliente, '2026-11-04')
+    const item = ag.hoje.find((i) => i.tipo === 'retorno')
+    if (!item || item.tipo !== 'retorno') throw new Error('esperava retorno')
+    expect(item.passo).toBe(1)
+    expect(item.totalPassos).toBe(3)
+  })
+
+  it('re-marcar MVP limpa o frio, usa o maior ciclo + 1 e não regride a etapa', async () => {
+    const { cliente } = await criarUsuarioTeste()
+    const lead = await novoLead(cliente)
+    await adicionarRetorno(cliente, lead.id, '2026-10-20')
+    await moverEtapa(cliente, lead.id, 'em_conversa')
+    const det = await obterLead(cliente, lead.id)
+    await registrarResultado(cliente, det.retornos.find((r) => r.status === 'pendente')!.id, {
+      resultado: 'sem_resposta',
+      hoje: '2026-10-20',
+    })
+    const frio = await obterLead(cliente, lead.id)
+    expect(frio.lead.frio).toBe(true)
+    for (const r of frio.retornos.filter((x) => x.status === 'pendente')) await cancelarRetorno(cliente, r.id)
+    await marcarMvpEnviado(cliente, lead.id, { hoje: '2026-11-02' })
+    const depois = await obterLead(cliente, lead.id)
+    expect(depois.lead.frio).toBe(false)
+    expect(depois.lead.etapa).toBe('em_conversa')
+    const pend = depois.retornos.filter((r) => r.status === 'pendente')
+    expect(pend).toHaveLength(3)
+    expect(pend.every((r) => r.ciclo === 3)).toBe(true)
+  })
+
+  it('moverEtapa para em_conversa limpa o frio, cancela reativações e mantém retorno manual', async () => {
+    const { cliente } = await criarUsuarioTeste()
+    const lead = await novoLead(cliente)
+    await adicionarRetorno(cliente, lead.id, '2026-10-20')
+    const det = await obterLead(cliente, lead.id)
+    await registrarResultado(cliente, det.retornos[0].id, { resultado: 'sem_resposta', hoje: '2026-10-20' })
+    expect((await obterLead(cliente, lead.id)).lead.frio).toBe(true)
+    await adicionarRetorno(cliente, lead.id, '2026-10-30')
+    await moverEtapa(cliente, lead.id, 'em_conversa')
+    const depois = await obterLead(cliente, lead.id)
+    expect(depois.lead.frio).toBe(false)
+    expect(depois.lead.etapa).toBe('em_conversa')
+    const pend = depois.retornos.filter((r) => r.status === 'pendente')
+    expect(pend.map((r) => [r.origem, r.data_prevista])).toEqual([['manual', '2026-10-30']])
+    expect(depois.retornos.filter((r) => r.origem === 'reativacao').every((r) => r.status === 'cancelado')).toBe(true)
+    expect(depois.eventos.map((e) => e.tipo)).toContain('reativado')
+  })
+
+  it('moverEtapa para fora de perdido limpa o motivo da perda', async () => {
+    const { cliente } = await criarUsuarioTeste()
+    const lead = await novoLead(cliente)
+    await moverEtapa(cliente, lead.id, 'perdido', await motivo(cliente))
+    expect((await obterLead(cliente, lead.id)).lead.motivo_perda_id).not.toBeNull()
+    await moverEtapa(cliente, lead.id, 'em_conversa')
+    expect((await obterLead(cliente, lead.id)).lead.motivo_perda_id).toBeNull()
   })
 })

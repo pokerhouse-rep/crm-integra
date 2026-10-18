@@ -7,6 +7,9 @@ import { ErroNegocio, lancarSeErro, type Lead, type Retorno, type SupabaseClient
 
 const MSG_MOTIVO = 'Informe o motivo da perda.'
 
+/** Etapas em que já há conversa com o lead (ou desfecho): a cadência automática para e o frio é limpo. */
+const ETAPAS_COM_CONVERSA: Etapa[] = ['em_conversa', 'proposta_enviada', 'negociacao', 'fechado', 'perdido']
+
 async function buscarLead(db: SupabaseClient, id: string): Promise<Lead> {
   const { data, error } = await db.from('leads').select('*').eq('id', id).maybeSingle()
   lancarSeErro(error, 'Falha ao ler lead')
@@ -22,12 +25,11 @@ async function atualizarLeadRow(db: SupabaseClient, id: string, campos: Record<s
   lancarSeErro(error, 'Falha ao atualizar lead')
 }
 
-async function cancelarPendentes(db: SupabaseClient, leadId: string): Promise<void> {
-  const { error } = await db
-    .from('retornos')
-    .update({ status: 'cancelado' })
-    .eq('lead_id', leadId)
-    .eq('status', 'pendente')
+/** Cancela os retornos pendentes do lead; com `origens`, só os dessas origens. */
+async function cancelarPendentes(db: SupabaseClient, leadId: string, origens?: OrigemRetorno[]): Promise<void> {
+  let q = db.from('retornos').update({ status: 'cancelado' }).eq('lead_id', leadId).eq('status', 'pendente')
+  if (origens) q = q.in('origem', origens)
+  const { error } = await q
   lancarSeErro(error, 'Falha ao cancelar retornos')
 }
 
@@ -65,10 +67,13 @@ export async function marcarMvpEnviado(
   leadId: string,
   opcoes: { link?: string; hoje: DataISO },
 ): Promise<void> {
-  await buscarLead(db, leadId)
+  const lead = await buscarLead(db, leadId)
   if ((await contarPendentes(db, leadId)) > 0) throw new ErroNegocio('Este lead já tem retornos pendentes.')
   const config = await obterConfig(db)
-  const campos: Record<string, unknown> = { mvp_enviado_em: opcoes.hoje, etapa: 'mvp_enviado' }
+  // Novo envio abre um ciclo novo; a etapa só avança a partir de prospect (nunca regride).
+  const ciclo = ((await maiorCiclo(db, leadId)) ?? 0) + 1
+  const campos: Record<string, unknown> = { mvp_enviado_em: opcoes.hoje, frio: false }
+  if (lead.etapa === 'prospect') campos.etapa = 'mvp_enviado'
   if (opcoes.link !== undefined) campos.link_mvp = opcoes.link
   await atualizarLeadRow(db, leadId, campos)
   await criarRetornos(
@@ -77,10 +82,10 @@ export async function marcarMvpEnviado(
     gerarDatasSequencia(opcoes.hoje, config.sequenciaPadrao).map((data) => ({
       data,
       origem: 'sequencia' as const,
-      ciclo: 1,
+      ciclo,
     })),
   )
-  await registrarEvento(db, leadId, 'mvp_enviado', { link: opcoes.link ?? null })
+  await registrarEvento(db, leadId, 'mvp_enviado', { link: opcoes.link ?? null, ciclo })
 }
 
 export async function registrarResultado(
@@ -161,13 +166,21 @@ export async function moverEtapa(
   const lead = await buscarLead(db, leadId)
   const campos: Record<string, unknown> = { etapa }
   if (etapa === 'perdido') campos.motivo_perda_id = motivoPerdaId
+  else if (lead.etapa === 'perdido') campos.motivo_perda_id = null
   if (etapa === 'fechado') campos.cliente = true
+  const comConversa = ETAPAS_COM_CONVERSA.includes(etapa)
+  const reativado = comConversa && lead.frio
+  if (reativado) campos.frio = false
   if (etapa === 'perdido' || etapa === 'fechado') await cancelarPendentes(db, leadId)
+  // Conversa em andamento: a cadência automática (sequência/reativação) para; manuais/adiados/proposta ficam.
+  else if (comConversa) await cancelarPendentes(db, leadId, ['sequencia', 'reativacao'])
   await atualizarLeadRow(db, leadId, campos)
   await registrarEvento(db, leadId, 'etapa_alterada', { de: lead.etapa, para: etapa })
+  if (reativado) await registrarEvento(db, leadId, 'reativado')
 }
 
-async function cicloAtual(db: SupabaseClient, leadId: string): Promise<number> {
+/** Maior ciclo entre os retornos do lead (qualquer status), ou null se não houver retornos. */
+async function maiorCiclo(db: SupabaseClient, leadId: string): Promise<number | null> {
   const { data, error } = await db
     .from('retornos')
     .select('ciclo')
@@ -176,7 +189,11 @@ async function cicloAtual(db: SupabaseClient, leadId: string): Promise<number> {
     .limit(1)
     .maybeSingle()
   lancarSeErro(error, 'Falha ao ler ciclo')
-  return data?.ciclo ?? 1
+  return data?.ciclo ?? null
+}
+
+async function cicloAtual(db: SupabaseClient, leadId: string): Promise<number> {
+  return (await maiorCiclo(db, leadId)) ?? 1
 }
 
 export async function adicionarRetorno(db: SupabaseClient, leadId: string, data: DataISO): Promise<void> {

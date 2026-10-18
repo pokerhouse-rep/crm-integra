@@ -17,6 +17,18 @@ export function dataValida(d: string): boolean {
   return !Number.isNaN(x.getTime()) && x.toISOString().slice(0, 10) === d
 }
 
+/** Mensagem de erro da sequência de prazos (dias), ou null se válida: 1 a 365, crescente, sem repetir. */
+export function erroSequencia(seq: number[]): string | null {
+  if (seq.length === 0) return 'A sequência de retornos precisa ter ao menos um prazo.'
+  if (!seq.every((n) => Number.isInteger(n) && n >= 1 && n <= 365)) {
+    return 'Os prazos da sequência devem ser números inteiros positivos (1 a 365 dias).'
+  }
+  if (!seq.every((n, i) => i === 0 || n > seq[i - 1])) {
+    return 'Os prazos da sequência devem estar em ordem crescente, sem repetir.'
+  }
+  return null
+}
+
 /** Hora 'HH:MM' (00:00 a 23:59). */
 export function horaValida(h: string): boolean {
   return HORA.test(h)

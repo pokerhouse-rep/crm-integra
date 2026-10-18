@@ -64,7 +64,7 @@ export default async function HojePage() {
           dataPrevista: retorno.data_prevista,
           atrasado,
           rotuloPasso: item.passo === 0 ? 'Retorno avulso' : `Retorno ${item.passo} de ${item.totalPassos}`,
-          frio: retorno.ciclo > 1 || lead.frio === true,
+          frio: lead.frio === true || retorno.origem === 'reativacao',
           mensagem,
           linkWhatsApp: linkWhatsApp(lead.whatsapp, mensagem),
         }}

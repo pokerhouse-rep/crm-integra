@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { criarUsuarioTeste } from './helpers'
 import { criarLead, obterLead } from '@/lib/servicos/leads'
 import { agendaDaSemana, agendaDoDia } from '@/lib/servicos/agenda'
+import { aplicarSequencia, marcarMvpEnviado } from '@/lib/servicos/retornos'
 import { concluirTarefa, criarTarefa, excluirTarefa, reagendarTarefa } from '@/lib/servicos/tarefas'
 
 async function novoLead(cliente: SupabaseClient, whatsapp = '(63) 99999-0000') {
@@ -93,6 +94,20 @@ describe('agenda', () => {
     expect(item.passo).toBe(1)
     expect(item.totalPassos).toBe(1)
     expect(item.modelo?.passo).toBe(1)
+  })
+
+  it('passo ignora retornos cancelados (trocar sequência depois do MVP)', async () => {
+    const { cliente } = await criarUsuarioTeste()
+    const lead = await novoLead(cliente)
+    await marcarMvpEnviado(cliente, lead.id, { hoje: '2026-10-19' }) // 21/10, 26/10, 29/10
+    await aplicarSequencia(cliente, lead.id, [1, 7], '2026-10-19') // cancela os 3; cria 20/10 e 26/10
+    const ag = await agendaDoDia(cliente, '2026-10-26')
+    const item = ag.hoje.find((i) => i.tipo === 'retorno')
+    if (!item || item.tipo !== 'retorno') throw new Error('esperava retorno')
+    expect(item.retorno.data_prevista).toBe('2026-10-26')
+    expect(item.passo).toBe(2)
+    expect(item.totalPassos).toBe(2)
+    expect(item.modelo?.passo).toBe(2)
   })
 
   it('retorno adiado tem passo 0 e o modelo avulso', async () => {

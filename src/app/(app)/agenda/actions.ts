@@ -11,7 +11,8 @@ import { dataValida, horaValida, uuidValido, type RespostaAcao } from '@/lib/val
 function revalidar() {
   revalidatePath('/agenda')
   revalidatePath('/hoje')
-  revalidatePath('/leads/[id]', 'page')
+  revalidatePath('/leads', 'layout') // lista e detalhe do lead
+  revalidatePath('/funil')
 }
 
 /** Cria tarefa avulsa (leadId nulo) ou ligada a um lead. */

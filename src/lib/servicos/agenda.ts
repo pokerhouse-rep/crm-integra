@@ -55,7 +55,7 @@ async function carregarItens(db: SupabaseClient, de: DataISO | null, ate: DataIS
   const tarefas = (rt.data ?? []) as TarefaComLead[]
   const modelos = (rm.data ?? []) as ModeloMensagem[]
 
-  // Posição de cada retorno no ciclo: todos os retornos de sequência/reativação do lead (qualquer status).
+  // Posição de cada retorno no ciclo: retornos de sequência/reativação do lead (pendentes e feitos; cancelados não contam).
   const leadIds = [...new Set(retornos.filter(emSequencia).map((r) => r.lead_id))]
   const ciclos = new Map<string, Retorno[]>()
   if (leadIds.length) {
@@ -64,6 +64,7 @@ async function carregarItens(db: SupabaseClient, de: DataISO | null, ate: DataIS
       .select('*')
       .in('lead_id', leadIds)
       .in('origem', ['sequencia', 'reativacao'])
+      .neq('status', 'cancelado')
       .order('data_prevista')
       .order('created_at')
     lancarSeErro(error, 'Falha ao carregar ciclos de retornos')

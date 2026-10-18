@@ -15,7 +15,7 @@ import {
   moverEtapa,
 } from '@/lib/servicos/retornos'
 import { concluirTarefa } from '@/lib/servicos/tarefas'
-import { dataValida, uuidValido, type RespostaAcao } from '@/lib/validacao'
+import { dataValida, erroSequencia, uuidValido, type RespostaAcao } from '@/lib/validacao'
 import { ErroNegocio, type DadosLead, type SupabaseClient } from '@/lib/servicos/tipos'
 
 export type { RespostaAcao }
@@ -169,10 +169,13 @@ export async function acaoTrocarSequencia(leadId: string, texto: string): Promis
     return { erro: 'Informe os dias separados por vírgula, por exemplo: 3, 7, 15.' }
   }
   if (offsets.length > 10) return { erro: 'Use no máximo 10 retornos.' }
+  const erro = erroSequencia(offsets)
+  if (erro) return { erro }
   return executar(leadId, (db) => aplicarSequencia(db, leadId, offsets, hojeEmPalmas()))
 }
 
 export async function acaoAdicionarAnotacao(leadId: string, texto: string): Promise<RespostaAcao> {
+  if (!uuidValido(leadId)) return { erro: 'Lead inválido.' }
   const t = texto.trim()
   if (!t) return { erro: 'Escreva a anotação.' }
   return executar(leadId, (db) => adicionarAnotacao(db, leadId, t))

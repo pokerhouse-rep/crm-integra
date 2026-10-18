@@ -85,7 +85,9 @@ export async function atualizarLead(db: SupabaseClient, id: string, dados: Parti
 }
 
 export async function adicionarAnotacao(db: SupabaseClient, leadId: string, texto: string): Promise<void> {
-  await registrarEvento(db, leadId, 'anotacao', { texto })
+  const { error } = await db.from('eventos').insert({ lead_id: leadId, tipo: 'anotacao', dados: { texto } })
+  if (error?.code === '23503') throw new ErroNegocio('Lead não encontrado.')
+  lancarSeErro(error, 'Falha ao registrar anotação')
 }
 
 export interface FiltrosLeads {
@@ -97,7 +99,14 @@ export interface FiltrosLeads {
 }
 
 export async function listarLeads(db: SupabaseClient, filtros: FiltrosLeads): Promise<LeadResumo[]> {
-  let q = db.from('leads').select('*').order('updated_at', { ascending: false })
+  // Próximo retorno via recurso embutido (sem lista de ids na URL): só pendentes, o de menor data.
+  let q = db
+    .from('leads')
+    .select('*, retornos(data_prevista)')
+    .eq('retornos.status', 'pendente')
+    .order('updated_at', { ascending: false })
+    .order('data_prevista', { referencedTable: 'retornos', ascending: true })
+    .limit(1, { referencedTable: 'retornos' })
   if (filtros.etapa) q = q.eq('etapa', filtros.etapa)
   if (filtros.nichoId) q = q.eq('nicho_id', filtros.nichoId)
   if (filtros.origemId) q = q.eq('origem_id', filtros.origemId)
@@ -115,22 +124,8 @@ export async function listarLeads(db: SupabaseClient, filtros: FiltrosLeads): Pr
   }
   const { data, error } = await q
   lancarSeErro(error, 'Falha ao listar leads')
-  const leads = (data ?? []) as Lead[]
-  if (leads.length === 0) return []
-
-  // Uma única consulta traz os retornos pendentes dos leads listados (ordenados por data); o primeiro de cada lead é o próximo.
-  const { data: pendentes, error: e2 } = await db
-    .from('retornos')
-    .select('lead_id, data_prevista')
-    .eq('status', 'pendente')
-    .in('lead_id', leads.map((l) => l.id))
-    .order('data_prevista')
-  lancarSeErro(e2, 'Falha ao ler próximos retornos')
-  const proximo = new Map<string, string>()
-  for (const r of (pendentes ?? []) as { lead_id: string; data_prevista: string }[]) {
-    if (!proximo.has(r.lead_id)) proximo.set(r.lead_id, r.data_prevista)
-  }
-  return leads.map((l) => ({ ...l, proximo_retorno: proximo.get(l.id) ?? null }))
+  const linhas = (data ?? []) as (Lead & { retornos: { data_prevista: string }[] | null })[]
+  return linhas.map(({ retornos, ...lead }) => ({ ...lead, proximo_retorno: retornos?.[0]?.data_prevista ?? null }))
 }
 
 /** Lead com este WhatsApp (aceita qualquer formato), ou null. */

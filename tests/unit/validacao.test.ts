@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { dataValida, horaValida, uuidValido } from '@/lib/validacao'
+import { dataValida, erroSequencia, horaValida, uuidValido } from '@/lib/validacao'
 
 describe('validacao', () => {
   it('dataValida aceita datas reais e rejeita as impossíveis', () => {
@@ -19,5 +19,13 @@ describe('validacao', () => {
   it('uuidValido', () => {
     expect(uuidValido('cf9cac3b-2d2d-4ce7-a462-8f6cadd6c970')).toBe(true)
     expect(uuidValido('lixo')).toBe(false)
+  })
+  it('erroSequencia exige inteiros 1..365 em ordem crescente, sem repetir', () => {
+    expect(erroSequencia([2, 5, 10])).toBeNull()
+    expect(erroSequencia([])).toMatch(/ao menos um prazo/)
+    expect(erroSequencia([0, 5])).toMatch(/1 a 365/)
+    expect(erroSequencia([400])).toMatch(/1 a 365/)
+    expect(erroSequencia([3, 3])).toMatch(/ordem crescente/)
+    expect(erroSequencia([7, 3])).toMatch(/ordem crescente/)
   })
 })
