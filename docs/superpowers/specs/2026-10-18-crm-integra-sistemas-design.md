@@ -51,6 +51,7 @@ O CRM existe para que **o sistema lembre os retornos no lugar do dono**, e para 
 - **Repositório próprio:** a pasta `C:\Users\PC\Desktop\CRM Integra Sistemas` tem git próprio. Nunca commitar no repositório de `C:\Users\PC` (Integra Solar).
 - **Identidade visual:** logo da Integra Sistemas em `docs/assets/logo-integra-sistemas.png`. Cores extraídas da logo: azul-marinho (~`#0B3A63`), laranja (~`#D9782D`) e azul-claro (~`#29ABE2`). O builder deve confirmar os hex exatos a partir do arquivo.
 - Valores monetários guardados em **centavos (inteiro)** no banco.
+- **Por enquanto, nada em serviços externos (decisão do dono):** não criar repositório no GitHub, não criar/alterar projetos no Supabase na nuvem e não fazer deploy na Vercel até o dono autorizar explicitamente. Todo o desenvolvimento e os testes acontecem só no computador local.
 
 ## 4. Como funciona — o que foi decidido
 
