@@ -3,6 +3,8 @@ import { sair } from '../../login/actions'
 import { criarClienteServidor } from '@/lib/supabase/server'
 import { listarModelos, listarTodasOpcoes, obterConfig } from '@/lib/servicos/config'
 import { FormPrazos } from '@/components/config/FormPrazos'
+import { listarServicos } from '@/lib/servicos/catalogo'
+import { ListaServicos } from '@/components/config/ListaServicos'
 import { ListaOpcoes } from '@/components/config/ListaOpcoes'
 import { EditorModelos } from '@/components/config/EditorModelos'
 
@@ -17,21 +19,28 @@ function Secao({ titulo, children }: { titulo: string; children: React.ReactNode
 
 export default async function Pagina() {
   const db = await criarClienteServidor()
-  const [config, modelos, nichos, origens, motivos] = await Promise.all([
+  const [config, modelos, nichos, origens, motivos, servicos] = await Promise.all([
     obterConfig(db),
     listarModelos(db),
     listarTodasOpcoes(db, 'nicho'),
     listarTodasOpcoes(db, 'origem'),
     listarTodasOpcoes(db, 'motivo_perda'),
+    listarServicos(db, { incluirInativos: true }),
   ])
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <h1 className="text-xl font-semibold text-marinho">Configurações</h1>
       <Secao titulo="Retornos">
-        <FormPrazos sequencia={config.sequenciaPadrao} diasReativacao={config.diasReativacao} />
+        <FormPrazos sequencia={config.sequenciaPadrao} diasReativacao={config.diasReativacao}
+          diasRetornoProposta={config.diasRetornoProposta}
+          diasLembreteCobranca={config.diasLembreteCobranca}
+        />
       </Secao>
       <Secao titulo="Modelos de mensagem">
         <EditorModelos modelos={modelos} />
+      </Secao>
+      <Secao titulo="Catálogo de serviços">
+        <ListaServicos servicos={servicos} />
       </Secao>
       <Secao titulo="Nichos">
         <ListaOpcoes tipo="nicho" opcoes={nichos} />

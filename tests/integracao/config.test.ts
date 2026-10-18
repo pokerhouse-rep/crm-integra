@@ -37,6 +37,14 @@ describe('configurações', () => {
     expect(c.diasRetornoProposta).toBe(3)
   })
 
+  it('salvarConfig grava dias de retorno de proposta e de lembrete de cobrança', async () => {
+    const { cliente } = await criarUsuarioTeste()
+    await salvarConfig(cliente, { diasRetornoProposta: 5, diasLembreteCobranca: 7 })
+    const c = await obterConfig(cliente)
+    expect(c.diasRetornoProposta).toBe(5)
+    expect(c.diasLembreteCobranca).toBe(7)
+  })
+
   it('nova sequência padrão é usada no próximo marcarMvpEnviado', async () => {
     const { cliente } = await criarUsuarioTeste()
     await salvarConfig(cliente, { sequenciaPadrao: [1, 3] })

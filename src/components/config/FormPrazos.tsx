@@ -6,9 +6,21 @@ import { acaoSalvarPrazos } from '@/app/(app)/config/actions'
 const campo =
   'mt-1 block min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-base focus-visible:outline-2 focus-visible:outline-azul'
 
-export function FormPrazos({ sequencia, diasReativacao }: { sequencia: number[]; diasReativacao: number }) {
+export function FormPrazos({
+  sequencia,
+  diasReativacao,
+  diasRetornoProposta,
+  diasLembreteCobranca,
+}: {
+  sequencia: number[]
+  diasReativacao: number
+  diasRetornoProposta: number
+  diasLembreteCobranca: number
+}) {
   const [seq, setSeq] = useState(sequencia.join(', '))
   const [dias, setDias] = useState(String(diasReativacao))
+  const [retornoProposta, setRetornoProposta] = useState(String(diasRetornoProposta))
+  const [lembrete, setLembrete] = useState(String(diasLembreteCobranca))
   const [pendente, iniciar] = useTransition()
   const [erro, setErro] = useState<string | null>(null)
   const [ok, setOk] = useState(false)
@@ -19,7 +31,12 @@ export function FormPrazos({ sequencia, diasReativacao }: { sequencia: number[];
     setErro(null)
     setOk(false)
     iniciar(async () => {
-      const r = await acaoSalvarPrazos(seq, dias)
+      const r = await acaoSalvarPrazos({
+        sequencia: seq,
+        diasReativacao: dias,
+        diasRetornoProposta: retornoProposta,
+        diasLembreteCobranca: lembrete,
+      })
       if (r.erro) setErro(r.erro)
       else setOk(true)
     })
@@ -35,6 +52,16 @@ export function FormPrazos({ sequencia, diasReativacao }: { sequencia: number[];
       <label className="block text-sm text-slate-700">
         Reativação de leads frios (dias)
         <input type="text" inputMode="numeric" value={dias} onChange={(e) => setDias(e.target.value)} className={campo} />
+        <span className="mt-1 block text-xs text-slate-500">Entre 1 e 365.</span>
+      </label>
+      <label className="block text-sm text-slate-700">
+        Retorno após enviar proposta (dias)
+        <input type="text" inputMode="numeric" value={retornoProposta} onChange={(e) => setRetornoProposta(e.target.value)} className={campo} />
+        <span className="mt-1 block text-xs text-slate-500">Entre 1 e 365.</span>
+      </label>
+      <label className="block text-sm text-slate-700">
+        Lembrete de cobrança (dias antes do vencimento)
+        <input type="text" inputMode="numeric" value={lembrete} onChange={(e) => setLembrete(e.target.value)} className={campo} />
         <span className="mt-1 block text-xs text-slate-500">Entre 1 e 365.</span>
       </label>
       {erro && (
