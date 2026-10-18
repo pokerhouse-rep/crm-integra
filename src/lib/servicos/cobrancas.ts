@@ -138,19 +138,28 @@ export async function marcarPago(
   id: string,
   o: { pagoEm: DataISO; valorPagoCentavos?: number },
 ): Promise<void> {
-  let valor = o.valorPagoCentavos
-  if (valor === undefined) {
-    const { data, error } = await db.from('cobrancas').select('valor_centavos').eq('id', id).maybeSingle()
-    lancarSeErro(error, 'Falha ao ler cobrança')
-    if (!data) throw new ErroNegocio('Cobrança não encontrada.')
-    valor = Number(data.valor_centavos)
+  const valor = o.valorPagoCentavos
+  if (valor !== undefined && (!Number.isInteger(valor) || valor <= 0)) {
+    throw new ErroNegocio('Valor recebido inválido.')
   }
+  // Sem valor informado, o banco usa o valor da própria cobrança (lido depois do lock).
   await chamarRpc(
     db,
     'marcar_pago',
-    { p_cobranca_id: id, p_pago_em: o.pagoEm, p_valor_pago: valor },
+    { p_cobranca_id: id, p_pago_em: o.pagoEm, p_valor_pago: valor ?? null },
     'Falha ao marcar cobrança como paga',
   )
+}
+
+export async function cobrancasDoContrato(db: SupabaseClient, contratoId: string): Promise<CobrancaResumo[]> {
+  const { data, error } = await db
+    .from('cobrancas')
+    .select(SELECT_RESUMO)
+    .eq('contrato_id', contratoId)
+    .order('vencimento')
+    .order('created_at')
+  lancarSeErro(error, 'Falha ao listar cobranças do contrato')
+  return ((data ?? []) as unknown as LinhaResumo[]).map(paraResumo)
 }
 
 export async function desfazerPagamento(db: SupabaseClient, id: string): Promise<void> {

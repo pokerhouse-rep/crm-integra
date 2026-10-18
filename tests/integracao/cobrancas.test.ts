@@ -82,6 +82,17 @@ describe('cobranças', () => {
     expect([...p.atrasadas, ...p.vencendo].find((x) => x.id === c.id)).toBeUndefined()
   })
 
+  it('marcarPago com valor 0 ou inválido falha com "Valor recebido inválido."', async () => {
+    const { cliente } = await criarUsuarioTeste()
+    await criarClienteComContrato(cliente)
+    const c = await achar(cliente, 'parcela', 1)
+    await expect(marcarPago(cliente, c.id, { pagoEm: '2026-10-20', valorPagoCentavos: 0 })).rejects.toThrow('Valor recebido inválido.')
+    await expect(marcarPago(cliente, c.id, { pagoEm: '2026-10-20', valorPagoCentavos: 10.5 })).rejects.toThrow('Valor recebido inválido.')
+    const { error } = await cliente.rpc('marcar_pago', { p_cobranca_id: c.id, p_pago_em: '2026-10-20', p_valor_pago: 0 })
+    expect(error?.message).toBe('Valor recebido inválido.')
+    expect((await achar(cliente, 'parcela', 1)).status).toBe('aberta')
+  })
+
   it('marcarPago em cobrança suspensa falha', async () => {
     const { cliente } = await criarUsuarioTeste()
     await criarClienteComContrato(cliente)

@@ -149,6 +149,7 @@ as $$
 declare
   v_lead_id uuid;
   v_cobranca public.cobrancas;
+  v_valor bigint;
 begin
   select lead_id into v_lead_id from public.cobrancas where id = p_cobranca_id;
   if not found then
@@ -165,17 +166,19 @@ begin
   if p_pago_em is null then
     raise exception 'Informe a data do pagamento.' using errcode = 'P0001';
   end if;
-  if p_valor_pago is null or p_valor_pago < 0 then
+  -- p_valor_pago nulo = o valor da própria cobrança, lido depois do lock.
+  if p_valor_pago is not null and p_valor_pago <= 0 then
     raise exception 'Valor recebido inválido.' using errcode = 'P0001';
   end if;
+  v_valor := coalesce(p_valor_pago, v_cobranca.valor_centavos);
 
   update public.cobrancas
-  set status = 'paga', pago_em = p_pago_em, valor_pago_centavos = p_valor_pago
+  set status = 'paga', pago_em = p_pago_em, valor_pago_centavos = v_valor
   where id = p_cobranca_id;
 
   insert into public.eventos (lead_id, tipo, dados)
   values (v_cobranca.lead_id, 'cobranca_paga',
-    jsonb_build_object('cobranca_id', p_cobranca_id, 'valor', p_valor_pago));
+    jsonb_build_object('cobranca_id', p_cobranca_id, 'valor', v_valor));
 end;
 $$;
 
@@ -213,3 +216,163 @@ revoke execute on function public.marcar_pago(uuid, date, bigint) from public, a
 grant execute on function public.marcar_pago(uuid, date, bigint) to authenticated;
 revoke execute on function public.desfazer_pagamento(uuid) from public, anon;
 grant execute on function public.desfazer_pagamento(uuid) to authenticated;
+
+-- Ciclo de vida do contrato. Ordem de locks: lead primeiro, depois contrato.
+-- Trava o contrato (lead antes); falha se não existir ou estiver cancelado.
+create function public.travar_contrato(p_contrato_id uuid)
+returns public.contratos
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_lead_id uuid;
+  v_contrato public.contratos;
+begin
+  select lead_id into v_lead_id from public.contratos where id = p_contrato_id;
+  if not found then
+    raise exception 'Contrato não encontrado.' using errcode = 'P0001';
+  end if;
+  perform 1 from public.leads where id = v_lead_id for update;
+  select * into v_contrato from public.contratos where id = p_contrato_id for update;
+  if v_contrato.status = 'cancelado' then
+    raise exception 'Contrato cancelado não pode ser alterado.' using errcode = 'P0001';
+  end if;
+  return v_contrato;
+end;
+$$;
+
+create function public.pausar_contrato(p_contrato_id uuid, p_hoje date)
+returns void
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_contrato public.contratos;
+begin
+  v_contrato := public.travar_contrato(p_contrato_id);
+  if v_contrato.status <> 'ativo' then
+    raise exception 'Este contrato não está ativo.' using errcode = 'P0001';
+  end if;
+  if p_hoje is null then
+    raise exception 'Informe a data.' using errcode = 'P0001';
+  end if;
+
+  update public.cobrancas set status = 'suspensa'
+  where contrato_id = p_contrato_id and status = 'aberta' and vencimento >= p_hoje;
+
+  update public.contratos set status = 'pausado', pausado_em = p_hoje where id = p_contrato_id;
+
+  insert into public.eventos (lead_id, tipo, dados)
+  values (v_contrato.lead_id, 'contrato_pausado', jsonb_build_object('contrato_id', p_contrato_id));
+end;
+$$;
+
+create function public.reativar_contrato(p_contrato_id uuid, p_hoje date)
+returns void
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_contrato public.contratos;
+begin
+  v_contrato := public.travar_contrato(p_contrato_id);
+  if v_contrato.status <> 'pausado' then
+    raise exception 'Este contrato não está pausado.' using errcode = 'P0001';
+  end if;
+  if p_hoje is null then
+    raise exception 'Informe a data.' using errcode = 'P0001';
+  end if;
+
+  -- Parcelas e à vista voltam a abertas; mensalidades só se vencerem de hoje em diante.
+  update public.cobrancas set status = 'aberta'
+  where contrato_id = p_contrato_id and status = 'suspensa'
+    and (tipo <> 'mensalidade' or vencimento >= p_hoje);
+
+  update public.contratos set status = 'ativo', pausado_em = null where id = p_contrato_id;
+
+  insert into public.eventos (lead_id, tipo, dados)
+  values (v_contrato.lead_id, 'contrato_reativado', jsonb_build_object('contrato_id', p_contrato_id));
+end;
+$$;
+
+create function public.cancelar_contrato(p_contrato_id uuid, p_hoje date)
+returns void
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_contrato public.contratos;
+begin
+  v_contrato := public.travar_contrato(p_contrato_id);
+  if p_hoje is null then
+    raise exception 'Informe a data.' using errcode = 'P0001';
+  end if;
+
+  delete from public.cobrancas
+  where contrato_id = p_contrato_id and status in ('aberta', 'suspensa') and vencimento >= p_hoje;
+
+  update public.contratos set status = 'cancelado', cancelado_em = p_hoje where id = p_contrato_id;
+
+  insert into public.eventos (lead_id, tipo, dados)
+  values (v_contrato.lead_id, 'contrato_cancelado', jsonb_build_object('contrato_id', p_contrato_id));
+end;
+$$;
+
+create function public.reajustar_item(p_item_id uuid, p_a_partir_de date, p_valor bigint)
+returns void
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_item public.contrato_itens;
+  v_contrato public.contratos;
+  v_ate date;
+begin
+  select * into v_item from public.contrato_itens where id = p_item_id;
+  if not found then
+    raise exception 'Item não encontrado.' using errcode = 'P0001';
+  end if;
+  v_contrato := public.travar_contrato(v_item.contrato_id);
+  if v_item.tipo <> 'recorrente' then
+    raise exception 'Só mensalidades podem ser reajustadas.' using errcode = 'P0001';
+  end if;
+  if p_valor is null or p_valor <= 0 then
+    raise exception 'Informe o novo valor da mensalidade.' using errcode = 'P0001';
+  end if;
+  if p_a_partir_de is null or p_a_partir_de <> date_trunc('month', p_a_partir_de)::date then
+    raise exception 'Informe o mês do reajuste.' using errcode = 'P0001';
+  end if;
+
+  insert into public.reajustes (contrato_item_id, a_partir_de, valor_centavos)
+  values (p_item_id, p_a_partir_de, p_valor)
+  on conflict (contrato_item_id, a_partir_de) do update set valor_centavos = excluded.valor_centavos;
+
+  -- Vale até o próximo reajuste do mesmo item (que tem valor próprio).
+  select min(a_partir_de) into v_ate
+  from public.reajustes where contrato_item_id = p_item_id and a_partir_de > p_a_partir_de;
+
+  update public.cobrancas set valor_centavos = p_valor
+  where contrato_item_id = p_item_id and tipo = 'mensalidade' and status in ('aberta', 'suspensa')
+    and competencia >= p_a_partir_de and (v_ate is null or competencia < v_ate);
+
+  insert into public.eventos (lead_id, tipo, dados)
+  values (v_contrato.lead_id, 'contrato_reajustado',
+    jsonb_build_object('item', p_item_id, 'valor', p_valor, 'a_partir_de', p_a_partir_de));
+end;
+$$;
+
+revoke execute on function public.travar_contrato(uuid) from public, anon;
+revoke execute on function public.pausar_contrato(uuid, date) from public, anon;
+grant execute on function public.pausar_contrato(uuid, date) to authenticated;
+revoke execute on function public.reativar_contrato(uuid, date) from public, anon;
+grant execute on function public.reativar_contrato(uuid, date) to authenticated;
+revoke execute on function public.cancelar_contrato(uuid, date) from public, anon;
+grant execute on function public.cancelar_contrato(uuid, date) to authenticated;
+revoke execute on function public.reajustar_item(uuid, date, bigint) from public, anon;
+grant execute on function public.reajustar_item(uuid, date, bigint) to authenticated;
+grant execute on function public.travar_contrato(uuid) to authenticated;
