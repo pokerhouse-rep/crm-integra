@@ -3,17 +3,27 @@
 import { useState, useTransition, type ReactNode } from 'react'
 import {
   ArrowRightLeft,
+  Ban,
+  Banknote,
   CheckCircle2,
   Circle,
+  FileCheck,
+  FileText,
+  FileX,
+  Pause,
   Pencil,
   PhoneCall,
+  Play,
   Plus,
   RotateCcw,
   Send,
   Snowflake,
   StickyNote,
+  TrendingUp,
+  Undo2,
 } from 'lucide-react'
 import { formatarDataBR } from '@/lib/dominio/datas'
+import { formatarReais, formatarValorNegociacao } from '@/lib/dominio/dinheiro'
 import { ETAPAS } from '@/lib/dominio/tipos'
 import { acaoAdicionarAnotacao } from '@/app/(app)/leads/actions'
 
@@ -49,6 +59,10 @@ function dataHora(iso: string): string {
 
 function str(v: unknown): string | null {
   return typeof v === 'string' && v ? v : null
+}
+
+function num(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) ? v : null
 }
 
 function descrever(e: EventoLinha): { icone: ReactNode; texto: string; detalhe?: string } {
@@ -91,6 +105,52 @@ function descrever(e: EventoLinha): { icone: ReactNode; texto: string; detalhe?:
         texto: 'Tarefa concluída',
         detalhe: str(d.titulo) ?? undefined,
       }
+    case 'proposta_criada':
+      return { icone: <FileText size={tam} aria-hidden />, texto: 'Proposta criada' }
+    case 'proposta_enviada': {
+      const v = num(d.versao)
+      const valor = formatarValorNegociacao({
+        unicoCentavos: num(d.total_unico) ?? 0,
+        recorrenteCentavos: num(d.total_recorrente) ?? 0,
+      })
+      const partes = [v !== null ? `v${v}` : null, valor || null].filter(Boolean)
+      return {
+        icone: <FileText size={tam} aria-hidden />,
+        texto: `Proposta enviada${partes.length ? ` (${partes.join(' · ')})` : ''}`,
+      }
+    }
+    case 'proposta_nova_versao': {
+      const v = num(d.versao)
+      return { icone: <FileText size={tam} aria-hidden />, texto: `Nova versão da proposta${v !== null ? ` (v${v})` : ''}` }
+    }
+    case 'proposta_aceita':
+      return { icone: <FileCheck size={tam} aria-hidden />, texto: 'Proposta aceita' }
+    case 'proposta_recusada':
+      return { icone: <FileX size={tam} aria-hidden />, texto: 'Proposta recusada' }
+    case 'contrato_pausado':
+      return { icone: <Pause size={tam} aria-hidden />, texto: 'Contrato pausado' }
+    case 'contrato_reativado':
+      return { icone: <Play size={tam} aria-hidden />, texto: 'Contrato reativado' }
+    case 'contrato_cancelado':
+      return { icone: <Ban size={tam} aria-hidden />, texto: 'Contrato cancelado' }
+    case 'contrato_reajustado': {
+      const valor = num(d.valor)
+      const de = str(d.a_partir_de)
+      const quando = de ? ` a partir de ${de.slice(5, 7)}/${de.slice(0, 4)}` : ''
+      return {
+        icone: <TrendingUp size={tam} aria-hidden />,
+        texto: `Mensalidade reajustada${valor !== null ? ` para ${formatarReais(valor)}` : ''}${quando}`,
+      }
+    }
+    case 'cobranca_paga': {
+      const valor = num(d.valor)
+      return {
+        icone: <Banknote size={tam} aria-hidden />,
+        texto: valor !== null ? `Pagamento registrado: ${formatarReais(valor)}` : 'Pagamento registrado',
+      }
+    }
+    case 'pagamento_desfeito':
+      return { icone: <Undo2 size={tam} aria-hidden />, texto: 'Pagamento desfeito' }
     default:
       return { icone: <Circle size={tam} aria-hidden />, texto: e.tipo.replaceAll('_', ' ') }
   }

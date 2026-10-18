@@ -9,6 +9,9 @@ import { listarOpcoes, obterConfig, obterModeloAvulso } from '@/lib/servicos/con
 import { obterLead } from '@/lib/servicos/leads'
 import { listarTarefasDoLead } from '@/lib/servicos/tarefas'
 import { ErroNegocio } from '@/lib/servicos/tipos'
+import { listarContratos } from '@/lib/servicos/contratos'
+import { listarPropostasDoLead } from '@/lib/servicos/propostas'
+import { ListaPropostasDoLead } from '@/components/propostas/ListaPropostasDoLead'
 import { BotaoMvpEnviado } from '@/components/leads/BotaoMvpEnviado'
 import { EditorRetornos } from '@/components/leads/EditorRetornos'
 import { LinhaDoTempo } from '@/components/leads/LinhaDoTempo'
@@ -27,12 +30,18 @@ const ROTULO_ORIGEM: Record<string, string> = {
   proposta: 'Pós-proposta',
 }
 
+const ROTULO_STATUS_CONTRATO: Record<string, string> = {
+  ativo: 'Ativo',
+  pausado: 'Pausado',
+  cancelado: 'Cancelado',
+}
+
 export default async function LeadPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   if (!UUID.test(id)) notFound()
   const db = await criarClienteServidor()
   const hoje = hojeEmPalmas()
-  const [detalhe, config, tarefas, motivos, avulso] = await Promise.all([
+  const [detalhe, config, tarefas, motivos, avulso, propostas, contratos] = await Promise.all([
     obterLead(db, id).catch((e) => {
       if (e instanceof ErroNegocio) return null
       throw e
@@ -41,6 +50,8 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
     listarTarefasDoLead(db, id),
     listarOpcoes(db, 'motivo_perda'),
     obterModeloAvulso(db),
+    listarPropostasDoLead(db, id),
+    listarContratos(db, hoje, { leadId: id }),
   ])
   if (!detalhe) notFound()
   const { lead, retornos, eventos } = detalhe
@@ -82,6 +93,9 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
         </div>
 
         <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
+          {lead.cliente && (
+            <span className="rounded-full bg-marinho px-2 py-0.5 font-medium text-white">Cliente</span>
+          )}
           {lead.frio && <span className="rounded-full bg-azul/15 px-2 py-0.5 font-medium text-marinho">Frio</span>}
           {origem && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700">Origem: {origem}</span>}
           {lead.etapa === 'perdido' && motivoPerda && (
@@ -142,6 +156,41 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
         hoje={hoje}
         tarefas={tarefas.map((t) => ({ id: t.id, titulo: t.titulo, data: t.data, hora: t.hora }))}
       />
+
+      <ListaPropostasDoLead
+        leadId={lead.id}
+        propostas={propostas.map((p) => ({
+          id: p.id,
+          titulo: p.titulo,
+          versao: p.versaoAtual,
+          status: p.status,
+          unicoCentavos: p.totalUnicoCentavos,
+          recorrenteCentavos: p.totalRecorrenteCentavos,
+        }))}
+      />
+
+      {contratos.length > 0 && (
+        <section aria-labelledby="titulo-contratos" className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <h2 id="titulo-contratos" className="text-base font-semibold text-marinho">
+            Contratos
+          </h2>
+          <ul className="mt-3 space-y-2">
+            {contratos.map((c) => (
+              <li key={c.id}>
+                <Link
+                  href={`/clientes/${c.id}`}
+                  className="flex min-h-11 items-center justify-between gap-2 rounded-lg border border-slate-200 p-3 text-sm focus-visible:outline-2 focus-visible:outline-azul"
+                >
+                  <span className="min-w-0 font-medium break-words text-slate-800">{c.descricao}</span>
+                  <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+                    {ROTULO_STATUS_CONTRATO[c.status]}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <LinhaDoTempo
         leadId={lead.id}
