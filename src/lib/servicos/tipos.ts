@@ -107,3 +107,12 @@ export interface ModeloMensagem {
 export function lancarSeErro(erro: PostgrestError | null, contexto: string): void {
   if (erro) throw new Error(`${contexto}: ${erro.message}`)
 }
+
+export interface Opcao {
+  id: string
+  user_id: string
+  tipo: 'nicho' | 'origem' | 'motivo_perda'
+  nome: string
+  ativo: boolean | null
+  ordem: number | null
+}
