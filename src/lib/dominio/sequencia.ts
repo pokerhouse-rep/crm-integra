@@ -10,6 +10,10 @@ export interface EntradaResultado {
   pendentesRestantes: number
   offsetsPadrao: number[]
   diasReativacao: number
+  /** Origem do retorno que está sendo registrado (padrão: 'sequencia'). */
+  origem?: OrigemRetorno
+  /** Prazo do retorno pós-proposta, em dias corridos (padrão: 3). */
+  diasRetornoProposta?: number
 }
 
 export interface PlanoResultado {
@@ -46,6 +50,15 @@ export function planejarResultado(e: EntradaResultado): PlanoResultado {
     case 'sem_resposta':
       if (e.pendentesRestantes > 0) {
         return { cancelarPendentes: false, novaEtapa: null, novosRetornos: [], frio: 'manter', pedirMotivoPerda: false }
+      }
+      if (e.origem === 'proposta') {
+        return {
+          cancelarPendentes: false,
+          novaEtapa: null,
+          novosRetornos: [{ data: agendarPrazo(e.hoje, e.diasRetornoProposta ?? 3), origem: 'proposta' as const }],
+          frio: 'manter',
+          pedirMotivoPerda: false,
+        }
       }
       return {
         cancelarPendentes: false,

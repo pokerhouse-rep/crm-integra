@@ -3,12 +3,10 @@ import { gerarDatasSequencia, planejarResultado, type PlanoResultado } from '@/l
 import type { Etapa, OrigemRetorno, Resultado } from '@/lib/dominio/tipos'
 import { obterConfig } from './config'
 import { registrarEvento } from './leads'
+import { chamarRpc } from './rpc'
 import { ErroNegocio, lancarSeErro, type Lead, type Retorno, type SupabaseClient } from './tipos'
 
 const MSG_MOTIVO = 'Informe o motivo da perda.'
-
-/** Etapas em que já há conversa com o lead (ou desfecho): a cadência automática para e o frio é limpo. */
-const ETAPAS_COM_CONVERSA: Etapa[] = ['em_conversa', 'proposta_enviada', 'negociacao', 'fechado', 'perdido']
 
 async function buscarLead(db: SupabaseClient, id: string): Promise<Lead> {
   const { data, error } = await db.from('leads').select('*').eq('id', id).maybeSingle()
@@ -93,66 +91,50 @@ export async function registrarResultado(
   retornoId: string,
   entrada: { resultado: Resultado; novaData?: DataISO; motivoPerdaId?: string; hoje: DataISO },
 ): Promise<PlanoResultado> {
-  const jaRegistrado = () => new ErroNegocio('Este retorno já foi registrado.')
   const retorno = await buscarRetorno(db, retornoId)
-  if (retorno.status !== 'pendente') throw jaRegistrado()
+  if (retorno.status !== 'pendente') throw new ErroNegocio('Este retorno já foi registrado.')
   if (entrada.resultado === 'sem_interesse' && !entrada.motivoPerdaId) throw new ErroNegocio(MSG_MOTIVO)
   if (entrada.resultado === 'pediu_tempo' && !entrada.novaData) throw new ErroNegocio('Informe a nova data do retorno.')
 
   const lead = await buscarLead(db, retorno.lead_id)
   const config = await obterConfig(db)
-
-  // Transição atômica pendente -> feito: protege contra toque duplo / requisições concorrentes.
-  const { data: marcado, error } = await db
-    .from('retornos')
-    .update({ status: 'feito', resultado: entrada.resultado, feito_em: new Date().toISOString() })
-    .eq('id', retornoId)
-    .eq('status', 'pendente')
-    .select('id')
-  lancarSeErro(error, 'Falha ao registrar retorno')
-  if (!marcado || marcado.length === 0) throw jaRegistrado()
+  const pendentesRestantes = (await contarPendentes(db, lead.id)) - 1 // sem o retorno atual
 
   const plano = planejarResultado({
     resultado: entrada.resultado,
     hoje: entrada.hoje,
     novaData: entrada.novaData,
-    pendentesRestantes: await contarPendentes(db, lead.id),
+    pendentesRestantes,
     offsetsPadrao: config.sequenciaPadrao,
     diasReativacao: config.diasReativacao,
+    origem: retorno.origem,
+    diasRetornoProposta: config.diasRetornoProposta,
   })
-
-  if (plano.cancelarPendentes) await cancelarPendentes(db, lead.id)
 
   // Resposta só avança prospect/MVP enviado; etapas mais adiantadas não regridem.
   let novaEtapa = plano.novaEtapa
   if (entrada.resultado === 'respondeu' && lead.etapa !== 'prospect' && lead.etapa !== 'mvp_enviado') novaEtapa = null
 
-  await criarRetornos(
+  await chamarRpc(
     db,
-    lead.id,
-    plano.novosRetornos.map((n) => ({
-      data: n.data,
-      origem: n.origem,
-      ciclo: n.origem === 'reativacao' ? retorno.ciclo + 1 : retorno.ciclo,
-    })),
+    'aplicar_resultado',
+    {
+      p_retorno_id: retornoId,
+      p_resultado: entrada.resultado,
+      p_pendentes_esperados: pendentesRestantes,
+      p_cancelar_pendentes: plano.cancelarPendentes,
+      p_nova_etapa: novaEtapa,
+      p_novos_retornos: plano.novosRetornos.map((n) => ({
+        data: n.data,
+        origem: n.origem,
+        ciclo: n.origem === 'reativacao' ? retorno.ciclo + 1 : retorno.ciclo,
+      })),
+      p_frio: plano.frio,
+      p_motivo_perda_id: entrada.resultado === 'sem_interesse' ? entrada.motivoPerdaId : null,
+      p_nova_data: entrada.novaData ?? null,
+    },
+    'Falha ao registrar retorno',
   )
-
-  const campos: Record<string, unknown> = {}
-  if (novaEtapa && novaEtapa !== lead.etapa) campos.etapa = novaEtapa
-  if (plano.frio === 'marcar') campos.frio = true
-  if (plano.frio === 'limpar' && lead.frio) campos.frio = false
-  if (entrada.resultado === 'sem_interesse') campos.motivo_perda_id = entrada.motivoPerdaId
-  if (Object.keys(campos).length > 0) await atualizarLeadRow(db, lead.id, campos)
-
-  await registrarEvento(db, lead.id, 'retorno_feito', {
-    resultado: entrada.resultado,
-    retorno_id: retornoId,
-    ciclo: retorno.ciclo,
-    ...(entrada.novaData ? { nova_data: entrada.novaData } : {}),
-  })
-  if (campos.etapa) await registrarEvento(db, lead.id, 'etapa_alterada', { de: lead.etapa, para: campos.etapa })
-  if (plano.frio === 'marcar') await registrarEvento(db, lead.id, 'frio', { ciclo: retorno.ciclo + 1 })
-  if (plano.frio === 'limpar' && lead.frio) await registrarEvento(db, lead.id, 'reativado')
   return plano
 }
 
@@ -163,20 +145,12 @@ export async function moverEtapa(
   motivoPerdaId?: string,
 ): Promise<void> {
   if (etapa === 'perdido' && !motivoPerdaId) throw new ErroNegocio(MSG_MOTIVO)
-  const lead = await buscarLead(db, leadId)
-  const campos: Record<string, unknown> = { etapa }
-  if (etapa === 'perdido') campos.motivo_perda_id = motivoPerdaId
-  else if (lead.etapa === 'perdido') campos.motivo_perda_id = null
-  if (etapa === 'fechado') campos.cliente = true
-  const comConversa = ETAPAS_COM_CONVERSA.includes(etapa)
-  const reativado = comConversa && lead.frio
-  if (reativado) campos.frio = false
-  if (etapa === 'perdido' || etapa === 'fechado') await cancelarPendentes(db, leadId)
-  // Conversa em andamento: a cadência automática (sequência/reativação) para; manuais/adiados/proposta ficam.
-  else if (comConversa) await cancelarPendentes(db, leadId, ['sequencia', 'reativacao'])
-  await atualizarLeadRow(db, leadId, campos)
-  await registrarEvento(db, leadId, 'etapa_alterada', { de: lead.etapa, para: etapa })
-  if (reativado) await registrarEvento(db, leadId, 'reativado')
+  await chamarRpc(
+    db,
+    'mover_etapa',
+    { p_lead_id: leadId, p_etapa: etapa, p_motivo_perda_id: motivoPerdaId ?? null },
+    'Falha ao mover etapa',
+  )
 }
 
 /** Maior ciclo entre os retornos do lead (qualquer status), ou null se não houver retornos. */

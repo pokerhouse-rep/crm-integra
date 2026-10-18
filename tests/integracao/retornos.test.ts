@@ -303,4 +303,70 @@ describe('serviço de retornos', () => {
     await moverEtapa(cliente, lead.id, 'em_conversa')
     expect((await obterLead(cliente, lead.id)).lead.motivo_perda_id).toBeNull()
   })
+
+  it('sem_interesse com motivo inexistente falha e não altera nada', async () => {
+    const { cliente } = await criarUsuarioTeste()
+    const lead = await novoLead(cliente)
+    await marcarMvpEnviado(cliente, lead.id, { hoje: '2026-10-19' })
+    const det = await obterLead(cliente, lead.id)
+    await expect(
+      registrarResultado(cliente, det.retornos.find((r) => r.data_prevista === '2026-10-21')!.id, {
+        resultado: 'sem_interesse',
+        motivoPerdaId: crypto.randomUUID(),
+        hoje: '2026-10-21',
+      }),
+    ).rejects.toThrow()
+    const depois = await obterLead(cliente, lead.id)
+    expect(depois.retornos.filter((r) => r.status === 'pendente')).toHaveLength(3)
+    expect(depois.lead.etapa).toBe('mvp_enviado')
+  })
+
+  it('moverEtapa para perdido com motivo inexistente não cancela os retornos', async () => {
+    const { cliente } = await criarUsuarioTeste()
+    const lead = await novoLead(cliente)
+    await marcarMvpEnviado(cliente, lead.id, { hoje: '2026-10-19' })
+    await expect(moverEtapa(cliente, lead.id, 'perdido', crypto.randomUUID())).rejects.toThrow()
+    const depois = await obterLead(cliente, lead.id)
+    expect(depois.retornos.filter((r) => r.status === 'pendente')).toHaveLength(3)
+    expect(depois.lead.etapa).toBe('mvp_enviado')
+  })
+
+  it('aplicar_resultado recusa quando os pendentes mudaram', async () => {
+    const { cliente } = await criarUsuarioTeste()
+    const lead = await novoLead(cliente)
+    await marcarMvpEnviado(cliente, lead.id, { hoje: '2026-10-19' })
+    const det = await obterLead(cliente, lead.id)
+    const retorno = det.retornos.find((r) => r.data_prevista === '2026-10-21')!
+    const { error } = await cliente.rpc('aplicar_resultado', {
+      p_retorno_id: retorno.id,
+      p_resultado: 'sem_resposta',
+      p_pendentes_esperados: 5,
+      p_cancelar_pendentes: false,
+      p_nova_etapa: null,
+      p_novos_retornos: [],
+      p_frio: 'manter',
+      p_motivo_perda_id: null,
+      p_nova_data: null,
+    })
+    expect(error?.message).toBe('Os retornos deste lead mudaram. Atualize a página e tente de novo.')
+    const depois = await obterLead(cliente, lead.id)
+    expect(depois.retornos.find((r) => r.id === retorno.id)!.status).toBe('pendente')
+  })
+
+  it('sem_resposta no último retorno pós-proposta cria novo retorno de proposta', async () => {
+    const { cliente } = await criarUsuarioTeste()
+    const lead = await novoLead(cliente)
+    await moverEtapa(cliente, lead.id, 'proposta_enviada')
+    const { data: ins, error } = await cliente
+      .from('retornos')
+      .insert({ lead_id: lead.id, data_prevista: '2026-10-22', origem: 'proposta', ciclo: 1 })
+      .select('id')
+      .single()
+    expect(error).toBeNull()
+    await registrarResultado(cliente, ins!.id, { resultado: 'sem_resposta', hoje: '2026-10-22' })
+    const depois = await obterLead(cliente, lead.id)
+    const pend = depois.retornos.filter((r) => r.status === 'pendente')
+    expect(pend.map((r) => [r.origem, r.data_prevista])).toEqual([['proposta', '2026-10-26']])
+    expect(depois.lead.frio).toBe(false)
+  })
 })

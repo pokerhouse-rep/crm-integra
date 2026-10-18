@@ -54,4 +54,14 @@ describe('sequencia', () => {
     const p = planejarResultado({ ...base, resultado: 'respondeu', hoje: '2026-11-18', pendentesRestantes: 2 })
     expect(p).toMatchObject({ frio: 'limpar', cancelarPendentes: true, novaEtapa: 'em_conversa' })
   })
+  it('sem resposta no último retorno pós-proposta agenda outro retorno de proposta e não deixa frio', () => {
+    const p = planejarResultado({
+      resultado: 'sem_resposta', hoje: '2026-10-22', pendentesRestantes: 0, origem: 'proposta',
+      diasRetornoProposta: 3, offsetsPadrao: [2, 5, 10], diasReativacao: 30,
+    })
+    expect(p).toEqual({
+      cancelarPendentes: false, novaEtapa: null, frio: 'manter', pedirMotivoPerda: false,
+      novosRetornos: [{ data: '2026-10-26', origem: 'proposta' }],
+    })
+  })
 })
