@@ -57,6 +57,7 @@ describe('serviço de leads', () => {
     expect(achou.map((l) => l.nome_contato)).toEqual(['Maria'])
     const porNome = await listarLeads(cliente, { busca: 'joã' })
     expect(porNome.map((l) => l.nome_contato)).toEqual(['João'])
+    expect(await listarLeads(cliente, { busca: '()' })).toEqual([])
     expect(await listarLeads(cliente, {})).toHaveLength(2)
     expect(await listarLeads(cliente, { etapa: 'fechado' })).toHaveLength(0)
   })

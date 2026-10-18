@@ -167,16 +167,21 @@ export async function moverEtapa(
   await registrarEvento(db, leadId, 'etapa_alterada', { de: lead.etapa, para: etapa })
 }
 
-export async function adicionarRetorno(db: SupabaseClient, leadId: string, data: DataISO): Promise<void> {
-  await buscarLead(db, leadId)
-  const { data: ultimo } = await db
+async function cicloAtual(db: SupabaseClient, leadId: string): Promise<number> {
+  const { data, error } = await db
     .from('retornos')
     .select('ciclo')
     .eq('lead_id', leadId)
     .order('ciclo', { ascending: false })
     .limit(1)
     .maybeSingle()
-  await criarRetornos(db, leadId, [{ data, origem: 'manual', ciclo: ultimo?.ciclo ?? 1 }])
+  lancarSeErro(error, 'Falha ao ler ciclo')
+  return data?.ciclo ?? 1
+}
+
+export async function adicionarRetorno(db: SupabaseClient, leadId: string, data: DataISO): Promise<void> {
+  await buscarLead(db, leadId)
+  await criarRetornos(db, leadId, [{ data, origem: 'manual', ciclo: await cicloAtual(db, leadId) }])
 }
 
 export async function alterarDataRetorno(db: SupabaseClient, retornoId: string, data: DataISO): Promise<void> {
@@ -207,11 +212,14 @@ export async function aplicarSequencia(
   offsets: number[],
   base: DataISO,
 ): Promise<void> {
-  await buscarLead(db, leadId)
+  const lead = await buscarLead(db, leadId)
+  const ciclo = await cicloAtual(db, leadId)
   await cancelarPendentes(db, leadId)
   await criarRetornos(
     db,
     leadId,
-    gerarDatasSequencia(base, offsets).map((data) => ({ data, origem: 'sequencia' as const, ciclo: 1 })),
+    gerarDatasSequencia(base, offsets).map((data) => ({ data, origem: 'sequencia' as const, ciclo })),
   )
+  // Sequência ativa significa que o lead não está mais frio.
+  if (lead.frio) await atualizarLeadRow(db, leadId, { frio: false })
 }

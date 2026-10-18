@@ -106,8 +106,10 @@ export async function listarLeads(db: SupabaseClient, filtros: FiltrosLeads): Pr
     // remove caracteres que quebram a sintaxe do filtro .or() e curingas do LIKE
     const texto = busca.replace(/[,()%_*\\]/g, ' ').trim()
     const digitos = busca.replace(/\D/g, '')
-    const partes = [`nome_contato.ilike.%${texto}%`, `empresa.ilike.%${texto}%`]
+    const partes: string[] = []
+    if (texto) partes.push(`nome_contato.ilike.%${texto}%`, `empresa.ilike.%${texto}%`)
     if (digitos) partes.push(`whatsapp.like.%${digitos}%`)
+    if (partes.length === 0) return []
     q = q.or(partes.join(','))
   }
   const { data, error } = await q
