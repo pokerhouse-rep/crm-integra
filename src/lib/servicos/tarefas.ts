@@ -17,6 +17,7 @@ export async function criarTarefa(db: SupabaseClient, dados: DadosTarefa): Promi
     .insert({ titulo, data: dados.data, hora: dados.hora ?? null, lead_id: dados.leadId ?? null })
     .select()
     .single()
+  if (error?.code === '23503') throw new ErroNegocio('Lead não encontrado.')
   lancarSeErro(error, 'Falha ao criar tarefa')
   return data as Tarefa
 }

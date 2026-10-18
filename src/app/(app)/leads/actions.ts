@@ -14,10 +14,11 @@ import {
   marcarMvpEnviado,
   moverEtapa,
 } from '@/lib/servicos/retornos'
-import { concluirTarefa, criarTarefa } from '@/lib/servicos/tarefas'
+import { concluirTarefa } from '@/lib/servicos/tarefas'
+import { dataValida, uuidValido, type RespostaAcao } from '@/lib/validacao'
 import { ErroNegocio, type DadosLead, type SupabaseClient } from '@/lib/servicos/tipos'
 
-export type RespostaAcao = { erro?: string }
+export type { RespostaAcao }
 
 export interface ValoresLead {
   nomeContato: string
@@ -38,16 +39,6 @@ export interface RespostaSalvarLead {
   campo?: CampoLead
   /** Lead que já usa o WhatsApp informado (para linkar no aviso de duplicado). */
   leadExistenteId?: string
-}
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const DATA_ISO = /^\d{4}-\d{2}-\d{2}$/
-const HORA = /^\d{2}:\d{2}$/
-
-function dataValida(d: string): boolean {
-  if (!DATA_ISO.test(d)) return false
-  const x = new Date(`${d}T00:00:00Z`)
-  return !Number.isNaN(x.getTime()) && x.toISOString().slice(0, 10) === d
 }
 
 function linkValido(l: string): boolean {
@@ -73,7 +64,7 @@ function revalidarLead(leadId?: string) {
 }
 
 async function executar(leadId: string, fn: (db: SupabaseClient) => Promise<void>): Promise<RespostaAcao> {
-  if (!UUID.test(leadId)) return { erro: 'Lead inválido.' }
+  if (!uuidValido(leadId)) return { erro: 'Lead inválido.' }
   try {
     await fn(await criarClienteServidor())
   } catch (e) {
@@ -94,7 +85,7 @@ function campoDoErro(mensagem: string): CampoLead | undefined {
 
 /** Cria (leadId ausente) ou atualiza o lead; em caso de sucesso vai para o detalhe. */
 export async function acaoSalvarLead(leadId: string | null, v: ValoresLead): Promise<RespostaSalvarLead> {
-  if (leadId !== null && !UUID.test(leadId)) return { erro: 'Lead inválido.' }
+  if (leadId !== null && !uuidValido(leadId)) return { erro: 'Lead inválido.' }
   const nomeContato = v.nomeContato.trim()
   if (!nomeContato) return { erro: 'Informe o nome do contato.', campo: 'nomeContato' }
   if (!v.whatsapp.trim()) return { erro: 'Informe o WhatsApp.', campo: 'whatsapp' }
@@ -106,7 +97,7 @@ export async function acaoSalvarLead(leadId: string | null, v: ValoresLead): Pro
   }
   const nichoId = vazioParaNulo(v.nichoId)
   const origemId = vazioParaNulo(v.origemId)
-  if ((nichoId && !UUID.test(nichoId)) || (origemId && !UUID.test(origemId))) return { erro: 'Opção inválida.' }
+  if ((nichoId && !uuidValido(nichoId)) || (origemId && !uuidValido(origemId))) return { erro: 'Opção inválida.' }
 
   const dados: DadosLead = {
     nomeContato,
@@ -144,7 +135,7 @@ export async function acaoSalvarLead(leadId: string | null, v: ValoresLead): Pro
 
 export async function acaoMoverEtapa(leadId: string, etapa: Etapa, motivoPerdaId?: string): Promise<RespostaAcao> {
   if (!ETAPAS.some((e) => e.valor === etapa)) return { erro: 'Etapa inválida.' }
-  if (motivoPerdaId !== undefined && !UUID.test(motivoPerdaId)) return { erro: 'Motivo inválido.' }
+  if (motivoPerdaId !== undefined && !uuidValido(motivoPerdaId)) return { erro: 'Motivo inválido.' }
   return executar(leadId, (db) => moverEtapa(db, leadId, etapa, motivoPerdaId))
 }
 
@@ -155,13 +146,13 @@ export async function acaoMarcarMvpEnviado(leadId: string, link: string): Promis
 }
 
 export async function acaoAlterarDataRetorno(leadId: string, retornoId: string, data: DataISO): Promise<RespostaAcao> {
-  if (!UUID.test(retornoId)) return { erro: 'Retorno inválido.' }
+  if (!uuidValido(retornoId)) return { erro: 'Retorno inválido.' }
   if (!dataValida(data)) return { erro: 'Data inválida.' }
   return executar(leadId, (db) => alterarDataRetorno(db, retornoId, data))
 }
 
 export async function acaoCancelarRetorno(leadId: string, retornoId: string): Promise<RespostaAcao> {
-  if (!UUID.test(retornoId)) return { erro: 'Retorno inválido.' }
+  if (!uuidValido(retornoId)) return { erro: 'Retorno inválido.' }
   return executar(leadId, (db) => cancelarRetorno(db, retornoId))
 }
 
@@ -187,20 +178,7 @@ export async function acaoAdicionarAnotacao(leadId: string, texto: string): Prom
   return executar(leadId, (db) => adicionarAnotacao(db, leadId, t))
 }
 
-export async function acaoCriarTarefa(
-  leadId: string,
-  titulo: string,
-  data: DataISO,
-  hora: string,
-): Promise<RespostaAcao> {
-  if (!dataValida(data)) return { erro: 'Data inválida.' }
-  if (hora && !HORA.test(hora)) return { erro: 'Hora inválida.' }
-  return executar(leadId, async (db) => {
-    await criarTarefa(db, { titulo, data, hora: hora || null, leadId })
-  })
-}
-
 export async function acaoConcluirTarefaDoLead(leadId: string, tarefaId: string): Promise<RespostaAcao> {
-  if (!UUID.test(tarefaId)) return { erro: 'Tarefa inválida.' }
+  if (!uuidValido(tarefaId)) return { erro: 'Tarefa inválida.' }
   return executar(leadId, (db) => concluirTarefa(db, tarefaId))
 }

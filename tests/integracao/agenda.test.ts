@@ -162,4 +162,11 @@ describe('tarefas', () => {
     const { cliente } = await criarUsuarioTeste()
     await expect(criarTarefa(cliente, { titulo: '  ', data: '2026-10-19' })).rejects.toThrow(/título/)
   })
+
+  it('lead inexistente vira erro de negócio, não falha de banco', async () => {
+    const { cliente } = await criarUsuarioTeste()
+    await expect(
+      criarTarefa(cliente, { titulo: 'X', data: '2026-10-19', leadId: '00000000-0000-4000-8000-000000000000' }),
+    ).rejects.toThrow('Lead não encontrado.')
+  })
 })

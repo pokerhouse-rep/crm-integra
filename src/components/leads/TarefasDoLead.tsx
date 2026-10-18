@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from 'react'
 import { formatarDataBR, type DataISO } from '@/lib/dominio/datas'
-import { acaoConcluirTarefaDoLead, acaoCriarTarefa } from '@/app/(app)/leads/actions'
+import { acaoConcluirTarefaDoLead } from '@/app/(app)/leads/actions'
+import { acaoCriarTarefa } from '@/app/(app)/agenda/actions'
 
 export interface TarefaLead {
   id: string
@@ -30,7 +31,7 @@ export function TarefasDoLead({ leadId, hoje, tarefas }: Props) {
     if (pendente) return
     setErro(null)
     iniciar(async () => {
-      const r = await acaoCriarTarefa(leadId, titulo, data, hora)
+      const r = await acaoCriarTarefa(titulo, data, hora, leadId)
       if (r.erro) setErro(r.erro)
       else {
         setTitulo('')

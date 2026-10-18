@@ -3,22 +3,17 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { formatarDataBR, hojeEmPalmas, inicioDaSemana, somarDias } from '@/lib/dominio/datas'
 import { criarClienteServidor } from '@/lib/supabase/server'
 import { agendaDaSemana } from '@/lib/servicos/agenda'
+import { dataValida } from '@/lib/validacao'
 import { SemanaAgenda } from '@/components/agenda/SemanaAgenda'
 import { FormTarefa } from '@/components/agenda/FormTarefa'
 
 export const dynamic = 'force-dynamic'
 
-function dataReal(d: string | undefined): d is string {
-  if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return false
-  const x = new Date(`${d}T00:00:00Z`)
-  return !Number.isNaN(x.getTime()) && x.toISOString().slice(0, 10) === d
-}
-
 export default async function AgendaPage({ searchParams }: { searchParams: Promise<{ inicio?: string | string[] }> }) {
   const { inicio: bruto } = await searchParams
   const hoje = hojeEmPalmas()
   const param = Array.isArray(bruto) ? bruto[0] : bruto
-  const inicio = inicioDaSemana(dataReal(param) ? param : hoje)
+  const inicio = inicioDaSemana(param && dataValida(param) ? param : hoje)
   const fim = somarDias(inicio, 6)
 
   const semana = await agendaDaSemana(await criarClienteServidor(), inicio)

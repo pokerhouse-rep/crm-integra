@@ -3,7 +3,7 @@
 import { useRef, useState, useTransition } from 'react'
 import { Plus, X } from 'lucide-react'
 import type { DataISO } from '@/lib/dominio/datas'
-import { acaoBuscarLeads, acaoCriarTarefaAgenda } from '@/app/(app)/agenda/actions'
+import { acaoBuscarLeads, acaoCriarTarefa } from '@/app/(app)/agenda/actions'
 
 type LeadOpcao = { id: string; nome: string; empresa: string | null }
 
@@ -48,7 +48,7 @@ export function FormTarefa({ hoje }: { hoje: DataISO }) {
     if (pendente) return
     setErro(null)
     iniciar(async () => {
-      const r = await acaoCriarTarefaAgenda(titulo, data, hora, lead?.id ?? null)
+      const r = await acaoCriarTarefa(titulo, data, hora, lead?.id ?? null)
       if (r.erro) {
         setErro(r.erro)
         return

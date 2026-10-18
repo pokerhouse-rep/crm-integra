@@ -7,11 +7,10 @@ import { criarClienteServidor } from '@/lib/supabase/server'
 import { registrarResultado } from '@/lib/servicos/retornos'
 import { concluirTarefa, reagendarTarefa } from '@/lib/servicos/tarefas'
 import { ErroNegocio } from '@/lib/servicos/tipos'
+import { dataValida, type RespostaAcao } from '@/lib/validacao'
 
-export type RespostaAcao = { erro?: string }
 
 const RESULTADOS: Resultado[] = ['respondeu', 'pediu_tempo', 'sem_interesse', 'sem_resposta']
-const DATA_ISO = /^\d{4}-\d{2}-\d{2}$/
 
 async function executar(fn: () => Promise<void>): Promise<RespostaAcao> {
   try {
@@ -20,12 +19,14 @@ async function executar(fn: () => Promise<void>): Promise<RespostaAcao> {
     if (e instanceof ErroNegocio) {
       revalidatePath('/hoje') // o item pode já ter mudado de estado (ex.: toque duplo)
       revalidatePath('/agenda')
+      revalidatePath('/leads/[id]', 'page')
       return { erro: e.message }
     }
     throw e
   }
   revalidatePath('/hoje')
   revalidatePath('/agenda')
+  revalidatePath('/leads/[id]', 'page')
   return {}
 }
 
@@ -36,7 +37,7 @@ export async function acaoResultado(
   motivoPerdaId?: string,
 ): Promise<RespostaAcao> {
   if (!RESULTADOS.includes(resultado)) return { erro: 'Resultado inválido.' }
-  if (novaData !== undefined && !DATA_ISO.test(novaData)) return { erro: 'Data inválida.' }
+  if (novaData !== undefined && !dataValida(novaData)) return { erro: 'Data inválida.' }
   return executar(async () => {
     const db = await criarClienteServidor()
     await registrarResultado(db, retornoId, { resultado, novaData, motivoPerdaId, hoje: hojeEmPalmas() })
@@ -50,7 +51,7 @@ export async function acaoConcluirTarefa(id: string): Promise<RespostaAcao> {
 }
 
 export async function acaoReagendarTarefa(id: string, data: DataISO, hora: string | null): Promise<RespostaAcao> {
-  if (!DATA_ISO.test(data)) return { erro: 'Data inválida.' }
+  if (!dataValida(data)) return { erro: 'Data inválida.' }
   return executar(async () => {
     await reagendarTarefa(await criarClienteServidor(), id, data, hora)
   })
