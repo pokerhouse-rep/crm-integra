@@ -19,11 +19,13 @@ async function executar(fn: () => Promise<void>): Promise<RespostaAcao> {
   } catch (e) {
     if (e instanceof ErroNegocio) {
       revalidatePath('/hoje') // o item pode já ter mudado de estado (ex.: toque duplo)
+      revalidatePath('/agenda')
       return { erro: e.message }
     }
     throw e
   }
   revalidatePath('/hoje')
+  revalidatePath('/agenda')
   return {}
 }
 
