@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatarReais, lerReais, lerPercentual, formatarPercentual, formatarValorNegociacao } from '@/lib/dominio/dinheiro'
+import { formatarReais, lerReais, lerPercentual, formatarPercentual, formatarValorNegociacao, reaisParaCampo } from '@/lib/dominio/dinheiro'
 
 describe('dinheiro', () => {
   it('formata reais com espaço comum', () => {
@@ -41,5 +41,11 @@ describe('dinheiro', () => {
     expect(formatarValorNegociacao({ unicoCentavos: 150000, recorrenteCentavos: 0 })).toBe('R$ 1.500,00')
     expect(formatarValorNegociacao({ unicoCentavos: 0, recorrenteCentavos: 15000 })).toBe('R$ 150,00/mês')
     expect(formatarValorNegociacao({ unicoCentavos: 0, recorrenteCentavos: 0 })).toBe('')
+  })
+
+  it('reaisParaCampo gera texto que lerReais le de volta', () => {
+    expect(reaisParaCampo(150000)).toBe('1500,00')
+    expect(reaisParaCampo(5)).toBe('0,05')
+    expect(lerReais(reaisParaCampo(123456))).toBe(123456)
   })
 })

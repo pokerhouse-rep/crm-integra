@@ -6,6 +6,11 @@ export function formatarReais(centavos: number): string {
     .replace(/\u00a0/g, ' ')
 }
 
+/** Valor para preencher um campo de texto editável (ex.: 150000 -> "1500,00"); `lerReais` o lê de volta. */
+export function reaisParaCampo(centavos: number): string {
+  return (centavos / 100).toFixed(2).replace('.', ',')
+}
+
 export function lerReais(texto: string): number | null {
   const t = texto.replace(/R\$/g, '').replace(/\s+/g, '')
   if (t === '' || !/^[\d.,]+$/.test(t)) return null

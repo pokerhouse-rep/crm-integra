@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import type { ServicoCatalogo } from '@/lib/servicos/tipos'
-import { formatarReais } from '@/lib/dominio/dinheiro'
+import { formatarReais, reaisParaCampo } from '@/lib/dominio/dinheiro'
 import { acaoSalvarServico } from '@/app/(app)/config/actions'
 
 const campo =
@@ -11,26 +11,47 @@ const botao =
   'min-h-11 rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-700 focus-visible:outline-2 focus-visible:outline-azul disabled:opacity-50'
 const rotuloTipo = { unico: 'Valor único', recorrente: 'Mensal' } as const
 
-function centavosParaTexto(c: number): string {
-  return (c / 100).toFixed(2).replace('.', ',')
-}
-
 function Linha({ servico }: { servico: ServicoCatalogo }) {
   const ativo = servico.ativo !== false
   const [editando, setEditando] = useState(false)
   const [nome, setNome] = useState(servico.nome)
   const [tipo, setTipo] = useState<string>(servico.tipo)
-  const [preco, setPreco] = useState(centavosParaTexto(servico.preco_centavos))
+  const [preco, setPreco] = useState(reaisParaCampo(servico.preco_centavos))
   const [pendente, iniciar] = useTransition()
   const [erro, setErro] = useState<string | null>(null)
 
-  function salvar(novoAtivo: boolean, depois?: () => void) {
+  function cancelar() {
+    setNome(servico.nome)
+    setTipo(servico.tipo)
+    setPreco(reaisParaCampo(servico.preco_centavos))
+    setErro(null)
+    setEditando(false)
+  }
+
+  /** Salva o rascunho da edição (mantendo o ativo atual). */
+  function salvarEdicao() {
     if (pendente) return
     setErro(null)
     iniciar(async () => {
-      const r = await acaoSalvarServico(servico.id, nome, tipo, preco, novoAtivo)
+      const r = await acaoSalvarServico(servico.id, nome, tipo, preco, ativo)
       if (r.erro) setErro(r.erro)
-      else depois?.()
+      else setEditando(false)
+    })
+  }
+
+  /** Ativa/desativa usando só os valores salvos, nunca o rascunho. */
+  function alternarAtivo() {
+    if (pendente) return
+    setErro(null)
+    iniciar(async () => {
+      const r = await acaoSalvarServico(
+        servico.id,
+        servico.nome,
+        servico.tipo,
+        reaisParaCampo(servico.preco_centavos),
+        !ativo,
+      )
+      if (r.erro) setErro(r.erro)
     })
   }
 
@@ -56,10 +77,10 @@ function Linha({ servico }: { servico: ServicoCatalogo }) {
             </label>
           </div>
           <div className="flex gap-2">
-            <button type="button" disabled={pendente} onClick={() => salvar(ativo, () => setEditando(false))} className={botao}>
+            <button type="button" disabled={pendente} onClick={salvarEdicao} className={botao}>
               Salvar
             </button>
-            <button type="button" disabled={pendente} onClick={() => setEditando(false)} className={botao}>
+            <button type="button" disabled={pendente} onClick={cancelar} className={botao}>
               Cancelar
             </button>
           </div>
@@ -79,7 +100,7 @@ function Linha({ servico }: { servico: ServicoCatalogo }) {
           <button
             type="button"
             disabled={pendente}
-            onClick={() => salvar(!ativo)}
+            onClick={alternarAtivo}
             className={botao}
             aria-label={`${ativo ? 'Desativar' : 'Reativar'} ${servico.nome}`}
           >
@@ -124,7 +145,7 @@ export function ListaServicos({ servicos }: { servicos: ServicoCatalogo[] }) {
       ) : (
         <ul className="divide-y divide-slate-100">
           {servicos.map((s) => (
-            <Linha key={`${s.id}-${s.nome}-${s.tipo}-${s.preco_centavos}-${s.ativo}`} servico={s} />
+            <Linha key={s.id} servico={s} />
           ))}
         </ul>
       )}
