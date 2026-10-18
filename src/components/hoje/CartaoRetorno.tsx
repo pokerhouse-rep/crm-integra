@@ -150,7 +150,10 @@ export function CartaoRetorno({ dados, hoje, motivos }: Props) {
           pendente={pendente}
           erro={erro ?? undefined}
           onConfirmar={(id) => registrar('sem_interesse', undefined, id)}
-          onCancelar={() => setPainel(null)}
+          onCancelar={() => {
+            setErro(null)
+            setPainel(null)
+          }}
         />
       )}
 

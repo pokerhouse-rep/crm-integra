@@ -42,7 +42,7 @@ export function DialogoMotivoPerda({
 
   return (
     <div
-      className="fixed inset-0 z-30 flex items-end bg-black/40 md:items-center md:justify-center"
+      className="fixed inset-0 z-50 flex items-end bg-black/40 md:items-center md:justify-center"
       role="presentation"
       onClick={(e) => {
         if (e.target === e.currentTarget && !pendente) onCancelar()

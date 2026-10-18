@@ -62,7 +62,10 @@ export function SeletorEtapa({ leadId, etapa, motivos }: Props) {
           pendente={pendente}
           erro={erro ?? undefined}
           onConfirmar={(id) => mover('perdido', id)}
-          onCancelar={() => setPedindoMotivo(false)}
+          onCancelar={() => {
+            setErro(null)
+            setPedindoMotivo(false)
+          }}
         />
       )}
     </div>

@@ -32,7 +32,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
   if (!UUID.test(id)) notFound()
   const db = await criarClienteServidor()
   const hoje = hojeEmPalmas()
-  const [detalhe, config, tarefas, motivos, nichos, origens, avulso] = await Promise.all([
+  const [detalhe, config, tarefas, motivos, avulso] = await Promise.all([
     obterLead(db, id).catch((e) => {
       if (e instanceof ErroNegocio) return null
       throw e
@@ -40,12 +40,14 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
     obterConfig(db),
     listarTarefasDoLead(db, id),
     listarOpcoes(db, 'motivo_perda'),
-    listarOpcoes(db, 'nicho'),
-    listarOpcoes(db, 'origem'),
     obterModeloAvulso(db),
   ])
   if (!detalhe) notFound()
   const { lead, retornos, eventos } = detalhe
+  const [nichos, origens] = await Promise.all([
+    listarOpcoes(db, 'nicho', [lead.nicho_id]),
+    listarOpcoes(db, 'origem', [lead.origem_id]),
+  ])
 
   const pendentes = retornos.filter((r) => r.status === 'pendente')
   const mensagem = preencherModelo(avulso?.texto ?? '', {

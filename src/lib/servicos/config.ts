@@ -18,6 +18,8 @@ export async function obterConfig(db: SupabaseClient): Promise<Config> {
 export async function listarOpcoes(
   db: SupabaseClient,
   tipo: 'nicho' | 'origem' | 'motivo_perda',
+  /** Ids em uso que devem aparecer mesmo inativos (rotulados "(inativo)"). */
+  incluirIds: (string | null)[] = [],
 ): Promise<Opcao[]> {
   const { data, error } = await db
     .from('opcoes')
@@ -27,7 +29,13 @@ export async function listarOpcoes(
     .order('ordem')
     .order('nome')
   lancarSeErro(error, 'Falha ao listar opções')
-  return (data ?? []) as Opcao[]
+  const ativas = (data ?? []) as Opcao[]
+  const faltando = incluirIds.filter((id): id is string => !!id && !ativas.some((o) => o.id === id))
+  if (faltando.length === 0) return ativas
+  const { data: extras, error: e2 } = await db.from('opcoes').select('*').eq('tipo', tipo).in('id', faltando)
+  lancarSeErro(e2, 'Falha ao listar opções')
+  const inativas = ((extras ?? []) as Opcao[]).map((o) => ({ ...o, nome: `${o.nome} (inativo)` }))
+  return [...ativas, ...inativas]
 }
 
 /** Modelo de mensagem avulso (sem passo), usado no botão de WhatsApp do lead. */

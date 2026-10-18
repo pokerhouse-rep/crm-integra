@@ -118,11 +118,12 @@ export async function listarLeads(db: SupabaseClient, filtros: FiltrosLeads): Pr
   const leads = (data ?? []) as Lead[]
   if (leads.length === 0) return []
 
-  // Uma única consulta traz todos os retornos pendentes (ordenados por data); o primeiro de cada lead é o próximo.
+  // Uma única consulta traz os retornos pendentes dos leads listados (ordenados por data); o primeiro de cada lead é o próximo.
   const { data: pendentes, error: e2 } = await db
     .from('retornos')
     .select('lead_id, data_prevista')
     .eq('status', 'pendente')
+    .in('lead_id', leads.map((l) => l.id))
     .order('data_prevista')
   lancarSeErro(e2, 'Falha ao ler próximos retornos')
   const proximo = new Map<string, string>()

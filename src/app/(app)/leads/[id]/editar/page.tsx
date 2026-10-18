@@ -14,16 +14,16 @@ export default async function EditarLeadPage({ params }: { params: Promise<{ id:
   const { id } = await params
   if (!UUID.test(id)) notFound()
   const db = await criarClienteServidor()
-  const [nichos, origens, detalhe] = await Promise.all([
-    listarOpcoes(db, 'nicho'),
-    listarOpcoes(db, 'origem'),
-    obterLead(db, id).catch((e) => {
-      if (e instanceof ErroNegocio) return null
-      throw e
-    }),
-  ])
+  const detalhe = await obterLead(db, id).catch((e) => {
+    if (e instanceof ErroNegocio) return null
+    throw e
+  })
   if (!detalhe) notFound()
   const l = detalhe.lead
+  const [nichos, origens] = await Promise.all([
+    listarOpcoes(db, 'nicho', [l.nicho_id]),
+    listarOpcoes(db, 'origem', [l.origem_id]),
+  ])
   return (
     <div className="mx-auto max-w-2xl">
       <h1 className="mb-4 text-xl font-semibold text-marinho">Editar lead</h1>

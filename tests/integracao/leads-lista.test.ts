@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { criarUsuarioTeste } from './helpers'
+import { listarOpcoes } from '@/lib/servicos/config'
 import { atualizarLead, criarLead, listarLeads, obterLeadPorWhatsapp } from '@/lib/servicos/leads'
 import { adicionarRetorno, cancelarRetorno } from '@/lib/servicos/retornos'
 import { listarTarefasDoLead, criarTarefa } from '@/lib/servicos/tarefas'
@@ -39,5 +40,15 @@ describe('leitura da lista de leads', () => {
     await criarTarefa(cliente, { titulo: 'sem lead', data: '2030-01-01' })
     const t = await listarTarefasDoLead(cliente, lead.id)
     expect(t.map((x) => x.titulo)).toEqual(['antes', 'depois'])
+  })
+
+  it('listarOpcoes inclui opção inativa em uso, rotulada (inativo)', async () => {
+    const { cliente } = await criarUsuarioTeste()
+    const ativas = await listarOpcoes(cliente, 'nicho')
+    const alvo = ativas[0]
+    await cliente.from('opcoes').update({ ativo: false }).eq('id', alvo.id)
+    expect((await listarOpcoes(cliente, 'nicho')).some((o) => o.id === alvo.id)).toBe(false)
+    const comInativa = await listarOpcoes(cliente, 'nicho', [alvo.id, null])
+    expect(comInativa.find((o) => o.id === alvo.id)?.nome).toBe(`${alvo.nome} (inativo)`)
   })
 })
