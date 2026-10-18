@@ -1,4 +1,5 @@
 import { agendarPrazo, type DataISO } from '@/lib/dominio/datas'
+import { diaVencimentoPadrao, horizonteCobrancas, planejarCobrancasIniciais } from '@/lib/dominio/cobrancas'
 import { totaisProposta, validarItem, valorLiquido, type ItemProposta } from '@/lib/dominio/propostas'
 import { obterConfig } from './config'
 import { chamarRpc } from './rpc'
@@ -87,6 +88,62 @@ export async function enviarProposta(db: SupabaseClient, propostaId: string, hoj
 
 export async function recusarProposta(db: SupabaseClient, propostaId: string): Promise<void> {
   await chamarRpc(db, 'recusar_proposta', { p_proposta_id: propostaId }, 'Falha ao recusar proposta')
+}
+
+export async function aceitarProposta(
+  db: SupabaseClient,
+  propostaId: string,
+  o: { hoje: DataISO; diaVencimento?: number; primeiroVencimento?: DataISO; descricao?: string },
+): Promise<string> {
+  const dia = o.diaVencimento ?? diaVencimentoPadrao(o.hoje)
+  if (!Number.isInteger(dia) || dia < 1 || dia > 28) {
+    throw new ErroNegocio('O dia de vencimento deve ser entre 1 e 28.')
+  }
+  const { proposta, versoes } = await obterProposta(db, propostaId)
+  const versao = versoes[0]
+  if (!versao || versao.itens.length === 0) throw new ErroNegocio('A proposta não tem itens.')
+
+  const itens = versao.itens.map((i) => ({
+    descricao: i.descricao,
+    tipo: i.tipo,
+    valorCentavos: valorLiquido(i),
+    parcelas: i.parcelas,
+    mesInicio: i.mesInicio,
+  }))
+  const cobrancas = planejarCobrancasIniciais(itens, {
+    diaVencimento: dia,
+    primeiroVencimento: o.primeiroVencimento ?? o.hoje,
+    ate: horizonteCobrancas(o.hoje),
+  })
+
+  return chamarRpc<string>(
+    db,
+    'aceitar_proposta',
+    {
+      p_proposta_id: propostaId,
+      p_versao_id: versao.id,
+      p_descricao: o.descricao?.trim() || proposta.titulo,
+      p_dia_vencimento: dia,
+      p_data_inicio: o.hoje,
+      p_itens: itens.map((i) => ({
+        descricao: i.descricao,
+        tipo: i.tipo,
+        valor_centavos: i.valorCentavos,
+        parcelas: i.parcelas,
+        mes_inicio: i.mesInicio,
+      })),
+      p_cobrancas: cobrancas.map((c) => ({
+        item_indice: c.itemIndice,
+        tipo: c.tipo,
+        numero: c.numero,
+        total_parcelas: c.totalParcelas,
+        competencia: c.competencia,
+        vencimento: c.vencimento,
+        valor_centavos: c.valorCentavos,
+      })),
+    },
+    'Falha ao aceitar proposta',
+  )
 }
 
 function paraItemDominio(r: ItemPropostaRow): ItemProposta {

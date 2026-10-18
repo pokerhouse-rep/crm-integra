@@ -1,4 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { criarLead } from '@/lib/servicos/leads'
+import { aceitarProposta, criarProposta, enviarProposta, salvarItens } from '@/lib/servicos/propostas'
 
 const url = () => process.env.NEXT_PUBLIC_SUPABASE_URL!
 const anon = () => process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -27,4 +29,22 @@ export async function criarUsuarioTeste(): Promise<{ cliente: SupabaseClient; us
   if (login.error) throw new Error(`Falha no login do usuário de teste: ${login.error.message}`)
 
   return { cliente, userId: data.user.id }
+}
+
+/** Lead + proposta (site 150000 em 3x, hospedagem 15000/mês desde 2026-11-01), enviada e aceita em 2026-10-19 (dia 19). */
+export async function criarClienteComContrato(
+  cliente: SupabaseClient,
+): Promise<{ leadId: string; propostaId: string; contratoId: string }> {
+  const lead = await criarLead(cliente, {
+    nomeContato: 'Cliente Teste',
+    whatsapp: `(63) 9${String(Math.floor(Math.random() * 1e8)).padStart(8, '0')}`,
+  })
+  const propostaId = await criarProposta(cliente, lead.id)
+  await salvarItens(cliente, propostaId, [
+    { servicoId: null, descricao: 'Site institucional', tipo: 'unico', valorCentavos: 150000, parcelas: 3, mesInicio: null, desconto: null },
+    { servicoId: null, descricao: 'Hospedagem', tipo: 'recorrente', valorCentavos: 15000, parcelas: 1, mesInicio: '2026-11-01', desconto: null },
+  ])
+  await enviarProposta(cliente, propostaId, '2026-10-19')
+  const contratoId = await aceitarProposta(cliente, propostaId, { hoje: '2026-10-19' })
+  return { leadId: lead.id, propostaId, contratoId }
 }

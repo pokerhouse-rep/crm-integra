@@ -53,6 +53,8 @@ begin
 
   if v_proposta.status = 'aceita' then
     raise exception 'Proposta aceita não pode ser alterada.' using errcode = 'P0001';
+  elsif v_proposta.status = 'recusada' then
+    raise exception 'Proposta recusada. Crie uma nova versão para alterar.' using errcode = 'P0001';
   elsif v_proposta.status <> 'rascunho' then
     raise exception 'Esta versão já foi enviada. Crie uma nova versão para alterar.' using errcode = 'P0001';
   end if;

@@ -193,6 +193,16 @@ describe('serviço de propostas', () => {
     )
   })
 
+  it('salvarItens em proposta recusada falha com mensagem própria', async () => {
+    const { cliente } = await criarUsuarioTeste()
+    const { id } = await propostaComItens(cliente)
+    await enviarProposta(cliente, id, '2026-10-19')
+    await recusarProposta(cliente, id)
+    await expect(salvarItens(cliente, id, [itemSite])).rejects.toThrow(
+      'Proposta recusada. Crie uma nova versão para alterar.',
+    )
+  })
+
   it('nova versão de rascunho falha', async () => {
     const { cliente } = await criarUsuarioTeste()
     const { id } = await propostaComItens(cliente)
