@@ -7,14 +7,18 @@ import { ITENS_NAV } from './itens'
 
 export function BarraInferior() {
   const caminho = usePathname()
+  // O botão flutuante cobre valores em telas densas (ex.: proposta): só em /hoje e na lista de leads.
+  const mostrarBotaoLead = caminho === '/hoje' || caminho === '/leads'
   return (
     <>
-      <Link
-        href="/leads/novo"
-        className="fixed right-4 bottom-20 z-30 flex min-h-12 items-center gap-1 rounded-full bg-laranja px-5 font-semibold text-white shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-marinho md:hidden"
-      >
-        <Plus size={20} aria-hidden /> Lead
-      </Link>
+      {mostrarBotaoLead && (
+        <Link
+          href="/leads/novo"
+          className="fixed right-4 bottom-20 z-30 flex min-h-12 items-center gap-1 rounded-full bg-laranja px-5 font-semibold text-white shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-marinho md:hidden"
+        >
+          <Plus size={20} aria-hidden /> Lead
+        </Link>
+      )}
       <nav
         aria-label="Navegação principal"
         className="fixed inset-x-0 bottom-0 z-20 flex border-t border-slate-200 bg-white md:hidden"

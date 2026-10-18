@@ -9,7 +9,7 @@ import {
 } from '@/lib/dominio/cobrancas'
 import { formatarDataBR, type DataISO } from '@/lib/dominio/datas'
 import { formatarReais } from '@/lib/dominio/dinheiro'
-import { valorLiquido, type ItemProposta } from '@/lib/dominio/propostas'
+import { totaisProposta, valorLiquido, type ItemProposta } from '@/lib/dominio/propostas'
 import { dataValida } from '@/lib/validacao'
 
 interface Props {
@@ -18,7 +18,14 @@ interface Props {
   hoje: DataISO
   pendente: boolean
   erro?: string | null
-  onConfirmar: (v: { diaVencimento: string; primeiroVencimento: string; descricao: string }) => void
+  onConfirmar: (v: {
+    diaVencimento: string
+    primeiroVencimento: string
+    descricao: string
+    itens: number
+    unicoCentavos: number
+    recorrenteCentavos: number
+  }) => void
   onCancelar: () => void
 }
 
@@ -154,7 +161,17 @@ export function DialogoAceite({ itens, tituloProposta, hoje, pendente, erro, onC
           <button
             type="button"
             disabled={pendente || !diaOk || !dataOk}
-            onClick={() => onConfirmar({ diaVencimento: dia, primeiroVencimento: primeiro, descricao })}
+            onClick={() => {
+              const t = totaisProposta(itens)
+              onConfirmar({
+                diaVencimento: dia,
+                primeiroVencimento: primeiro,
+                descricao,
+                itens: itens.length,
+                unicoCentavos: t.unicoCentavos,
+                recorrenteCentavos: t.recorrenteCentavos,
+              })
+            }}
             className="min-h-11 rounded-lg bg-laranja text-sm font-medium text-white focus-visible:outline-2 focus-visible:outline-azul disabled:opacity-50"
           >
             {pendente ? 'Aceitando…' : 'Confirmar aceite'}

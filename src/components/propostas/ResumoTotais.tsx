@@ -13,15 +13,20 @@ function textoParcelas(itens: ItemProposta[], unicoCentavos: number): string | n
 
 export function ResumoTotais({ itens }: { itens: ItemProposta[] }) {
   const t = totaisProposta(itens)
-  const subtotal = itens.reduce((s, i) => s + i.valorCentavos, 0)
+  const subtotalUnico = itens.filter((i) => i.tipo === 'unico').reduce((s, i) => s + i.valorCentavos, 0)
+  const subtotalMensal = itens.filter((i) => i.tipo === 'recorrente').reduce((s, i) => s + i.valorCentavos, 0)
   const parcelas = textoParcelas(itens, t.unicoCentavos)
   return (
     <section aria-label="Totais da proposta" className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <h2 className="text-base font-semibold text-marinho">Totais</h2>
       <dl className="mt-2 space-y-1.5 text-sm">
         <div className="flex justify-between gap-3 text-slate-600">
-          <dt>Subtotal</dt>
-          <dd>{formatarReais(subtotal)}</dd>
+          <dt>Subtotal único</dt>
+          <dd>{formatarReais(subtotalUnico)}</dd>
+        </div>
+        <div className="flex justify-between gap-3 text-slate-600">
+          <dt>Subtotal mensal</dt>
+          <dd>{formatarReais(subtotalMensal)}/mês</dd>
         </div>
         <div className="flex justify-between gap-3 text-slate-600">
           <dt>Desconto</dt>

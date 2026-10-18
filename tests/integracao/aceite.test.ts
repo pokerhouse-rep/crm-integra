@@ -218,6 +218,37 @@ describe('aceite da proposta', () => {
     expect((await obterProposta(cliente, id)).proposta.status).toBe('rascunho')
   })
 
+it('versaoEsperada de outra versão (aba antiga) é recusada sem criar contrato', async () => {
+    const { cliente } = await criarUsuarioTeste()
+    const { id } = await propostaEnviada(cliente)
+    const v1 = (await obterProposta(cliente, id)).versoes[0].id
+    await novaVersao(cliente, id)
+    await expect(aceitarProposta(cliente, id, { hoje: '2026-10-19', versaoEsperada: v1 })).rejects.toThrow(
+      'A proposta mudou. Atualize a página e tente de novo.',
+    )
+    expect((await obterProposta(cliente, id)).proposta.status).toBe('rascunho')
+  })
+
+  it('mesma versão em rascunho com itens alterados: a impressão digital diverge e recusa', async () => {
+    const { cliente } = await criarUsuarioTeste()
+    const { id } = await propostaEnviada(cliente)
+    await novaVersao(cliente, id)
+    const v = (await obterProposta(cliente, id)).versoes[0].id
+    await salvarItens(cliente, id, [site, hospedagem])
+    const mostrado = { itens: 2, unicoCentavos: 150000, recorrenteCentavos: 15000 }
+    await salvarItens(cliente, id, [{ ...site, valorCentavos: 100000 }, hospedagem])
+    await expect(
+      aceitarProposta(cliente, id, { hoje: '2026-10-19', versaoEsperada: v, totaisEsperados: mostrado }),
+    ).rejects.toThrow('A proposta mudou. Atualize a página e tente de novo.')
+    await expect(
+      aceitarProposta(cliente, id, {
+        hoje: '2026-10-19',
+        versaoEsperada: v,
+        totaisEsperados: { itens: 2, unicoCentavos: 100000, recorrenteCentavos: 15000 },
+      }),
+    ).resolves.toBeTruthy()
+  })
+
   it('quantidade de itens diferente da versão atual falha', async () => {
     const { cliente } = await criarUsuarioTeste()
     const { id } = await propostaEnviada(cliente)

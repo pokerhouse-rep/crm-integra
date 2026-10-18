@@ -13,6 +13,8 @@ import {
   type VersaoProposta,
 } from './tipos'
 
+const MSG_MUDOU = 'A proposta mudou. Atualize a página e tente de novo.'
+
 export interface PropostaDetalhe {
   proposta: Proposta
   lead: Lead
@@ -93,7 +95,15 @@ export async function recusarProposta(db: SupabaseClient, propostaId: string): P
 export async function aceitarProposta(
   db: SupabaseClient,
   propostaId: string,
-  o: { hoje: DataISO; diaVencimento?: number; primeiroVencimento?: DataISO; descricao?: string },
+  o: {
+    hoje: DataISO
+    diaVencimento?: number
+    primeiroVencimento?: DataISO
+    descricao?: string
+    /** Versão e totais que a tela mostrou; se divergirem do banco, o aceite é recusado. */
+    versaoEsperada?: string
+    totaisEsperados?: { itens: number; unicoCentavos: number; recorrenteCentavos: number }
+  },
 ): Promise<string> {
   const dia = o.diaVencimento ?? diaVencimentoPadrao(o.hoje)
   if (!Number.isInteger(dia) || dia < 1 || dia > 28) {
@@ -102,6 +112,17 @@ export async function aceitarProposta(
   const { proposta, versoes } = await obterProposta(db, propostaId)
   const versao = versoes[0]
   if (!versao || versao.itens.length === 0) throw new ErroNegocio('A proposta não tem itens.')
+  if (o.versaoEsperada !== undefined && o.versaoEsperada !== versao.id) throw new ErroNegocio(MSG_MUDOU)
+  if (o.totaisEsperados) {
+    const t = totaisProposta(versao.itens)
+    if (
+      o.totaisEsperados.itens !== versao.itens.length ||
+      o.totaisEsperados.unicoCentavos !== t.unicoCentavos ||
+      o.totaisEsperados.recorrenteCentavos !== t.recorrenteCentavos
+    ) {
+      throw new ErroNegocio(MSG_MUDOU)
+    }
+  }
 
   const itens = versao.itens.map((i) => ({
     descricao: i.descricao,

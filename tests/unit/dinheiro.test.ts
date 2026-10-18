@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatarReais, lerReais, lerPercentual, formatarPercentual, formatarValorNegociacao, reaisParaCampo } from '@/lib/dominio/dinheiro'
+import { formatarReais, lerReais, lerPercentual, formatarPercentual, formatarValorNegociacao, reaisParaCampo, percentualParaCampo } from '@/lib/dominio/dinheiro'
 
 describe('dinheiro', () => {
   it('formata reais com espaço comum', () => {
@@ -47,5 +47,14 @@ describe('dinheiro', () => {
     expect(reaisParaCampo(150000)).toBe('1500,00')
     expect(reaisParaCampo(5)).toBe('0,05')
     expect(lerReais(reaisParaCampo(123456))).toBe(123456)
+  })
+})
+
+describe('percentualParaCampo', () => {
+  it('formata centésimos e é lido de volta por lerPercentual', () => {
+    expect(percentualParaCampo(1000)).toBe('10')
+    expect(percentualParaCampo(750)).toBe('7,5')
+    expect(percentualParaCampo(333)).toBe('3,33')
+    for (const c of [1, 50, 750, 1000, 10000]) expect(lerPercentual(percentualParaCampo(c))).toBe(c)
   })
 })

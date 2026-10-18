@@ -54,6 +54,7 @@ export default async function PropostaPage({ params }: { params: Promise<{ id: s
       <EditorItens
         key={`${atual.id}-${proposta.status}`}
         propostaId={proposta.id}
+        versaoId={atual.id}
         status={proposta.status}
         tituloProposta={proposta.titulo}
         hoje={hoje}

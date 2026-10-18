@@ -11,6 +11,13 @@ export function reaisParaCampo(centavos: number): string {
   return (centavos / 100).toFixed(2).replace('.', ',')
 }
 
+/** Percentual em centésimos de ponto (1000 -> "10", 750 -> "7,5"); `lerPercentual` o lê de volta. */
+export function percentualParaCampo(centesimos: number): string {
+  const inteiro = Math.floor(centesimos / 100)
+  const frac = String(centesimos % 100).padStart(2, '0').replace(/0$/, '')
+  return frac === '' || frac === '0' ? String(inteiro) : `${inteiro},${frac}`
+}
+
 export function lerReais(texto: string): number | null {
   const t = texto.replace(/R\$/g, '').replace(/\s+/g, '')
   if (t === '' || !/^[\d.,]+$/.test(t)) return null

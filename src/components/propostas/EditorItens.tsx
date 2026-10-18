@@ -29,6 +29,8 @@ export interface ServicoOpcao {
 
 interface Props {
   propostaId: string
+  /** Versão exibida; enviada junto ao aceite para detectar aba desatualizada. */
+  versaoId: string
   status: StatusProposta
   tituloProposta: string
   hoje: DataISO
@@ -63,6 +65,7 @@ function valoresDe(i: ItemEditavel): ValoresItem {
 
 export function EditorItens({
   propostaId,
+  versaoId,
   status,
   tituloProposta,
   hoje,
@@ -100,6 +103,19 @@ export function EditorItens({
   const [erroAceite, setErroAceite] = useState<string | null>(null)
   const [aceitando, setAceitando] = useState(false)
   const [pendente, iniciar] = useTransition()
+  const ocupado = useRef(false) // trava toques duplos no mesmo quadro, antes de `pendente` atualizar
+
+  function executarTravado(fn: () => Promise<void>) {
+    if (pendente || ocupado.current) return
+    ocupado.current = true
+    iniciar(async () => {
+      try {
+        await fn()
+      } finally {
+        ocupado.current = false
+      }
+    })
+  }
 
   const rascunho = status === 'rascunho'
   const sujo = rascunho && assinatura(itens) !== salvo
@@ -140,9 +156,8 @@ export function EditorItens({
   }
 
   function rodar(fn: () => Promise<void>) {
-    if (pendente) return
     setErro(null)
-    iniciar(fn)
+    executarTravado(fn)
   }
 
   async function simples(acao: (id: string) => Promise<{ erro?: string }>) {
@@ -168,7 +183,7 @@ export function EditorItens({
   const itensDoAceite: ItemProposta[] = rascunho ? validos : itensIniciais
 
   return (
-    <div className="space-y-4">
+    <fieldset disabled={pendente} className="m-0 min-w-0 space-y-4 border-0 p-0">
       <section aria-labelledby="titulo-itens" className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <h2 id="titulo-itens" className="text-base font-semibold text-marinho">
           Itens
@@ -393,15 +408,14 @@ export function EditorItens({
           erro={erroAceite}
           onCancelar={() => setAceitando(false)}
           onConfirmar={(v) => {
-            if (pendente) return
             setErroAceite(null)
-            iniciar(async () => {
-              const r = await acaoAceitarProposta(propostaId, v)
+            executarTravado(async () => {
+              const r = await acaoAceitarProposta(propostaId, { ...v, versaoId })
               if (r?.erro) setErroAceite(r.erro)
             })
           }}
         />
       )}
-    </div>
+    </fieldset>
   )
 }

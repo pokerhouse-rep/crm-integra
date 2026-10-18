@@ -1,5 +1,5 @@
 /** Conversão dos campos de texto do editor de itens para o domínio (módulo puro, usado por cliente e servidor). */
-import { lerPercentual, lerReais, reaisParaCampo } from '@/lib/dominio/dinheiro'
+import { lerPercentual, lerReais, percentualParaCampo, reaisParaCampo } from '@/lib/dominio/dinheiro'
 import type { ItemProposta } from '@/lib/dominio/propostas'
 import type { TipoValor } from '@/lib/dominio/tipos'
 
@@ -73,6 +73,10 @@ export function itemParaValores(i: ItemProposta): ValoresItem {
     parcelas: String(i.parcelas),
     mesInicio: i.mesInicio ? i.mesInicio.slice(0, 7) : '',
     descontoTipo: i.desconto?.tipo ?? '',
-    desconto: i.desconto ? reaisParaCampo(i.desconto.valor) : '',
+    desconto: i.desconto
+      ? i.desconto.tipo === 'percentual'
+        ? percentualParaCampo(i.desconto.valor)
+        : reaisParaCampo(i.desconto.valor)
+      : '',
   }
 }

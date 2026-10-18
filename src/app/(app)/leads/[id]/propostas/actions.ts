@@ -24,14 +24,12 @@ function revalidarTudo() {
 }
 
 async function executar(propostaId: string, fn: (db: SupabaseClient) => Promise<void>): Promise<RespostaAcao> {
-  if (!uuidValido(propostaId)) return { erro: 'Proposta inválida.' }
+  if (typeof propostaId !== 'string' || !uuidValido(propostaId)) return { erro: 'Proposta inválida.' }
   try {
     await fn(await criarClienteServidor())
   } catch (e) {
-    if (e instanceof ErroNegocio) {
-      revalidarTudo() // o estado pode ter mudado (ex.: toque duplo)
-      return { erro: e.message }
-    }
+    // Sem revalidar no erro: a tela mantém o aviso (um refresh remontaria o editor e o apagaria).
+    if (e instanceof ErroNegocio) return { erro: e.message }
     throw e
   }
   revalidarTudo()
@@ -39,7 +37,7 @@ async function executar(propostaId: string, fn: (db: SupabaseClient) => Promise<
 }
 
 export async function acaoCriarProposta(leadId: string): Promise<RespostaAcao> {
-  if (!uuidValido(leadId)) return { erro: 'Lead inválido.' }
+  if (typeof leadId !== 'string' || !uuidValido(leadId)) return { erro: 'Lead inválido.' }
   let id: string
   try {
     id = await criarProposta(await criarClienteServidor(), leadId)
@@ -52,7 +50,7 @@ export async function acaoCriarProposta(leadId: string): Promise<RespostaAcao> {
 }
 
 export async function acaoSalvarItens(propostaId: string, itens: ValoresItem[]): Promise<RespostaAcao> {
-  if (!Array.isArray(itens)) return { erro: 'Itens inválidos.' }
+  if (typeof propostaId !== 'string' || !Array.isArray(itens)) return { erro: 'Itens inválidos.' }
   const convertidos = converterItens(itens)
   if ('erro' in convertidos) return { erro: convertidos.erro }
   return executar(propostaId, (db) => salvarItens(db, propostaId, convertidos.itens))
@@ -74,9 +72,30 @@ export async function acaoRecusarProposta(propostaId: string): Promise<RespostaA
 
 export async function acaoAceitarProposta(
   propostaId: string,
-  v: { diaVencimento: string; primeiroVencimento: string; descricao: string },
+  v: {
+    diaVencimento: string
+    primeiroVencimento: string
+    descricao: string
+    versaoId: string
+    itens: number
+    unicoCentavos: number
+    recorrenteCentavos: number
+  },
 ): Promise<RespostaAcao> {
-  if (!uuidValido(propostaId)) return { erro: 'Proposta inválida.' }
+  if (typeof propostaId !== 'string' || !uuidValido(propostaId)) return { erro: 'Proposta inválida.' }
+  if (
+    !v ||
+    typeof v.diaVencimento !== 'string' ||
+    typeof v.primeiroVencimento !== 'string' ||
+    typeof v.descricao !== 'string' ||
+    typeof v.versaoId !== 'string' ||
+    !uuidValido(v.versaoId) ||
+    !Number.isInteger(v.itens) ||
+    !Number.isInteger(v.unicoCentavos) ||
+    !Number.isInteger(v.recorrenteCentavos)
+  ) {
+    return { erro: 'Dados do aceite inválidos.' }
+  }
   const dia = Number(v.diaVencimento)
   if (!/^\d{1,2}$/.test(v.diaVencimento.trim()) || dia < 1 || dia > 28) {
     return { erro: 'O dia de vencimento deve ser entre 1 e 28.' }
@@ -89,12 +108,11 @@ export async function acaoAceitarProposta(
       diaVencimento: dia,
       primeiroVencimento: v.primeiroVencimento,
       descricao: v.descricao,
+      versaoEsperada: v.versaoId,
+      totaisEsperados: { itens: v.itens, unicoCentavos: v.unicoCentavos, recorrenteCentavos: v.recorrenteCentavos },
     })
   } catch (e) {
-    if (e instanceof ErroNegocio) {
-      revalidarTudo()
-      return { erro: e.message }
-    }
+    if (e instanceof ErroNegocio) return { erro: e.message }
     throw e
   }
   revalidarTudo()
