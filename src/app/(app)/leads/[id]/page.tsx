@@ -11,6 +11,7 @@ import { listarTarefasDoLead } from '@/lib/servicos/tarefas'
 import { ErroNegocio } from '@/lib/servicos/tipos'
 import { listarContratos } from '@/lib/servicos/contratos'
 import { listarPropostasDoLead } from '@/lib/servicos/propostas'
+import { ROTULO_STATUS_CONTRATO } from '@/components/propostas/rotulos'
 import { ListaPropostasDoLead } from '@/components/propostas/ListaPropostasDoLead'
 import { BotaoMvpEnviado } from '@/components/leads/BotaoMvpEnviado'
 import { EditorRetornos } from '@/components/leads/EditorRetornos'
@@ -28,12 +29,6 @@ const ROTULO_ORIGEM: Record<string, string> = {
   adiado: 'Adiado',
   manual: 'Manual',
   proposta: 'Pós-proposta',
-}
-
-const ROTULO_STATUS_CONTRATO: Record<string, string> = {
-  ativo: 'Ativo',
-  pausado: 'Pausado',
-  cancelado: 'Cancelado',
 }
 
 export default async function LeadPage({ params }: { params: Promise<{ id: string }> }) {

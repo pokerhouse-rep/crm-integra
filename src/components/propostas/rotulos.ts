@@ -1,4 +1,4 @@
-import type { StatusProposta } from '@/lib/dominio/tipos'
+import type { StatusContrato, StatusProposta } from '@/lib/dominio/tipos'
 
 export const ROTULO_STATUS_PROPOSTA: Record<StatusProposta, string> = {
   rascunho: 'Rascunho',
@@ -12,4 +12,16 @@ export const COR_STATUS_PROPOSTA: Record<StatusProposta, string> = {
   enviada: 'bg-azul/15 text-marinho',
   aceita: 'bg-emerald-100 text-emerald-800',
   recusada: 'bg-slate-200 text-slate-600',
+}
+
+export const ROTULO_STATUS_CONTRATO: Record<StatusContrato, string> = {
+  ativo: 'Ativo',
+  pausado: 'Pausado',
+  cancelado: 'Cancelado',
+}
+
+export const COR_STATUS_CONTRATO: Record<StatusContrato, string> = {
+  ativo: 'bg-emerald-100 text-emerald-800',
+  pausado: 'bg-azul/15 text-marinho',
+  cancelado: 'bg-slate-200 text-slate-600',
 }
