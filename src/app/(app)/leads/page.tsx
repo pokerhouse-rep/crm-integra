@@ -35,12 +35,20 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
     <div className="mx-auto max-w-2xl">
       <header className="mb-4 flex items-center justify-between gap-2">
         <h1 className="text-xl font-semibold text-marinho">Leads</h1>
-        <Link
-          href="/leads/novo"
-          className="flex min-h-11 items-center rounded-lg bg-laranja px-4 text-sm font-medium text-white focus-visible:outline-2 focus-visible:outline-azul"
-        >
-          + Novo lead
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/leads/importar"
+            className="flex min-h-11 items-center rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 focus-visible:outline-2 focus-visible:outline-azul"
+          >
+            Importar planilha
+          </Link>
+          <Link
+            href="/leads/novo"
+            className="flex min-h-11 items-center rounded-lg bg-laranja px-4 text-sm font-medium text-white focus-visible:outline-2 focus-visible:outline-azul"
+          >
+            + Novo lead
+          </Link>
+        </div>
       </header>
 
       <form method="get" className="mb-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm" aria-label="Filtros">

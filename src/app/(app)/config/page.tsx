@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ChartColumn, Download, LogOut } from 'lucide-react'
+import { ChartColumn, Download, LogOut, Upload } from 'lucide-react'
 import { sair } from '../../login/actions'
 import { criarClienteServidor } from '@/lib/supabase/server'
 import { listarModelos, listarTodasOpcoes, obterConfig } from '@/lib/servicos/config'
@@ -77,6 +77,21 @@ export default async function Pagina() {
               <Download size={20} aria-hidden /> {ROTULOS_EXPORTACAO[t]}
             </a>
           ))}
+        </div>
+        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <Link
+            href="/leads/importar"
+            className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 focus-visible:outline-2 focus-visible:outline-azul"
+          >
+            <Upload size={20} aria-hidden /> Importar leads
+          </Link>
+          <a
+            href="/exportar/modelo"
+            download
+            className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 focus-visible:outline-2 focus-visible:outline-azul"
+          >
+            <Download size={20} aria-hidden /> Modelo de planilha
+          </a>
         </div>
       </Secao>
       <form action={sair} className="md:hidden">
