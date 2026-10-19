@@ -53,6 +53,21 @@ describe('vendas', () => {
     expect(r.ticketMensalCentavos).toBeNull()
     expect(r.tempoMedioDias).toBeNull()
   })
+  it('tempo médio ignora aceite anterior ao cadastro', () => {
+    const r = resumirVendas(
+      [
+        c('k1', 'a', '2026-10-05', '2026-10-01', [{ tipo: 'unico', valorCentavos: 100000 }]),
+        c('k2', 'b', '2026-08-01', '2026-10-05', [{ tipo: 'unico', valorCentavos: 50000 }]),
+      ],
+      (leadId) => (leadId === 'a' ? 'k1' : 'k2'),
+    )
+    expect(r.tempoMedioDias).toBe(4)
+    expect(r.contratos).toBe(2)
+    expect(r.unicoCentavos).toBe(150000)
+    const so = resumirVendas([c('k2', 'b', '2026-08-01', '2026-10-05', [{ tipo: 'unico', valorCentavos: 50000 }])], () => 'k2')
+    expect(so.tempoMedioDias).toBeNull()
+    expect(so.contratos).toBe(1)
+  })
   it('diasEntre', () => {
     expect(diasEntre('2026-10-01', '2026-10-10')).toBe(9)
     expect(diasEntre('2026-02-27', '2026-03-01')).toBe(2)

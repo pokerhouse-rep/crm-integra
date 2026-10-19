@@ -106,7 +106,10 @@ export function resumirVendas(
     }
   }
   const n = doPeriodo.length
-  const primeiros = doPeriodo.filter((k) => k.id === primeiroContratoDoLead(k.leadId))
+  // Aceite anterior ao cadastro do lead (cliente antigo cadastrado depois) não entra na média de tempo.
+  const primeiros = doPeriodo.filter(
+    (k) => k.id === primeiroContratoDoLead(k.leadId) && diasEntre(k.leadCriadoEm, k.dataInicio) >= 0,
+  )
   const tempo = primeiros.length
     ? Math.round(primeiros.reduce((s, k) => s + diasEntre(k.leadCriadoEm, k.dataInicio), 0) / primeiros.length)
     : null
