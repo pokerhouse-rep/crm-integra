@@ -1,3 +1,7 @@
+import type { StatusCobranca, TipoValor } from './tipos'
+import type { DataISO } from './datas'
+import { resumirMes } from './cobrancas'
+
 export interface EventoRelatorio {
   leadId: string
   tipo: string
@@ -62,4 +66,81 @@ export function quebrarConversao(
 export function taxa(parte: number, todo: number): number | null {
   if (todo === 0) return null
   return Math.round((parte * 1000) / todo) / 10
+}
+
+const MS_DIA = 86_400_000
+
+/** Dias corridos entre duas datas ISO (ate - de). */
+export function diasEntre(de: DataISO, ate: DataISO): number {
+  return Math.round((Date.parse(`${ate}T00:00:00Z`) - Date.parse(`${de}T00:00:00Z`)) / MS_DIA)
+}
+
+export interface ContratoRelatorio {
+  id: string
+  leadId: string
+  dataInicio: DataISO
+  leadCriadoEm: DataISO
+  itens: { tipo: TipoValor; valorCentavos: number }[]
+}
+
+export interface ResumoVendas {
+  contratos: number
+  unicoCentavos: number
+  mensalCentavos: number
+  ticketUnicoCentavos: number | null
+  ticketMensalCentavos: number | null
+  tempoMedioDias: number | null
+}
+
+/** Vendido no período (D5), ticket médio (D6) e tempo até fechar (D7). */
+export function resumirVendas(
+  doPeriodo: ContratoRelatorio[],
+  primeiroContratoDoLead: (leadId: string) => string,
+): ResumoVendas {
+  let unico = 0
+  let mensal = 0
+  for (const k of doPeriodo) {
+    for (const i of k.itens) {
+      if (i.tipo === 'unico') unico += i.valorCentavos
+      else mensal += i.valorCentavos
+    }
+  }
+  const n = doPeriodo.length
+  const primeiros = doPeriodo.filter((k) => k.id === primeiroContratoDoLead(k.leadId))
+  const tempo = primeiros.length
+    ? Math.round(primeiros.reduce((s, k) => s + diasEntre(k.leadCriadoEm, k.dataInicio), 0) / primeiros.length)
+    : null
+  return {
+    contratos: n,
+    unicoCentavos: unico,
+    mensalCentavos: mensal,
+    ticketUnicoCentavos: n ? Math.round(unico / n) : null,
+    ticketMensalCentavos: n ? Math.round(mensal / n) : null,
+    tempoMedioDias: tempo,
+  }
+}
+
+export function resumirRecebimentos(
+  cs: { status: StatusCobranca; vencimento: DataISO; valorCentavos: number; valorPagoCentavos: number | null }[],
+  hoje: DataISO,
+): { previstoCentavos: number; recebidoCentavos: number; aReceberCentavos: number; atrasadoCentavos: number } {
+  const atrasadoCentavos = cs
+    .filter((c) => c.status === 'aberta' && c.vencimento < hoje)
+    .reduce((s, c) => s + c.valorCentavos, 0)
+  return { ...resumirMes(cs), atrasadoCentavos }
+}
+
+/** Motivos de perda (D10): agrupados pelo nome, do maior para o menor, depois por nome. */
+export function contarMotivos(
+  perdidos: { motivoId: string | null }[],
+  nomeDoMotivo: (id: string) => string | undefined,
+): { nome: string; quantidade: number; percentual: number }[] {
+  const porNome = new Map<string, number>()
+  for (const p of perdidos) {
+    const nome = (p.motivoId && nomeDoMotivo(p.motivoId)) || 'Sem motivo'
+    porNome.set(nome, (porNome.get(nome) ?? 0) + 1)
+  }
+  return [...porNome]
+    .map(([nome, quantidade]) => ({ nome, quantidade, percentual: taxa(quantidade, perdidos.length) ?? 0 }))
+    .sort((a, b) => b.quantidade - a.quantidade || a.nome.localeCompare(b.nome, 'pt-BR'))
 }
