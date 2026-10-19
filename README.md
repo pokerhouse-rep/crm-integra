@@ -32,12 +32,12 @@ CRM pessoal (Next.js + Supabase local). Desenvolvimento apenas local.
 
 ### Simular vencimentos (teste local)
 
-Abra o Studio local em `http://127.0.0.1:54423` (SQL Editor) ou use `psql` na porta 54422 e mude as datas:
+Abra o Studio local em `http://127.0.0.1:54423` (SQL Editor) ou use `psql` na porta 54422 e mude as datas. Use a data de Palmas, e nao `current_date`: o banco roda em UTC e, depois das 21h, `current_date` ja e o dia seguinte.
 
 ```sql
 -- deixar uma cobranca atrasada
-update public.cobrancas set vencimento = current_date - 5 where id = '<id>';
+update public.cobrancas set vencimento = (now() at time zone 'America/Araguaina')::date - 5 where id = '<id>';
 -- fazer um retorno pos-proposta cair hoje
-update public.retornos set data_prevista = current_date
+update public.retornos set data_prevista = (now() at time zone 'America/Araguaina')::date
  where origem = 'proposta' and status = 'pendente';
 ```
