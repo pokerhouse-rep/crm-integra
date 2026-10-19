@@ -64,4 +64,19 @@ describe('importacao', () => {
     expect(r[0].dados?.cidade).toBeUndefined()
     expect(r[0].avisos).toEqual(['Origem "Indicação" não cadastrada; ficará em branco.'])
   })
+
+  it('link e e-mail inválidos ficam em branco com aviso', () => {
+    const o = { nichos: [], origens: [], nichoPadraoId: null, origemPadraoId: null, whatsappsExistentes: new Set<string>() }
+    const r = validarLinhas([['Ana', '63999998888', 'x@', 'javascript:alert(1)']], ['nome', 'whatsapp', 'email', 'link_mvp'], o)
+    expect(r[0].situacao).toBe('nova')
+    expect(r[0].dados?.email).toBeUndefined()
+    expect(r[0].dados?.linkMvp).toBeUndefined()
+    expect(r[0].avisos).toEqual(['E-mail inválido; ficará em branco.', 'Link do MVP inválido; ficará em branco.'])
+  })
+
+  it('linhas recusadas guardam os valores crus', () => {
+    const o = { nichos: [], origens: [], nichoPadraoId: null, origemPadraoId: null, whatsappsExistentes: new Set<string>() }
+    const r = validarLinhas([['Ana', '123']], ['nome', 'whatsapp'], o)
+    expect(r[0].bruto).toEqual({ nome: 'Ana', whatsapp: '123' })
+  })
 })

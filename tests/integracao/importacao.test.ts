@@ -44,6 +44,17 @@ describe('importação de leads', () => {
     )
   })
 
+  it('descarta link e e-mail inválidos na confirmação', async () => {
+    const { cliente } = await criarUsuarioTeste()
+    const dados = [{ nomeContato: 'Fa', whatsapp: '63966665555', linkMvp: 'javascript:alert(1)', email: 'x@' }]
+    expect(await importarLeads(cliente, dados)).toEqual({ importados: 1, ignorados: 0 })
+    const { data } = await cliente.from('leads').select('link_mvp, email').eq('whatsapp', '5563966665555').single()
+    expect(data).toEqual({ link_mvp: null, email: null })
+    await expect(
+      importarLeads(cliente, [{ nomeContato: 'G', whatsapp: '63955554444', empresa: 5 as unknown as string }]),
+    ).rejects.toThrow('Há linhas inválidas. Gere a prévia de novo.')
+  })
+
   it('arquivo vazio, grande demais e sem cabeçalho válido', async () => {
     const { cliente } = await criarUsuarioTeste()
     const padroes = { nichoId: null, origemId: null }

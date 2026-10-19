@@ -7,6 +7,7 @@ import {
   type LinhaImportacao,
 } from '@/lib/dominio/importacao'
 import { normalizarTelefone } from '@/lib/dominio/telefone'
+import { emailValido, linkValido } from '@/lib/validacao'
 import { listarOpcoes } from './config'
 import { lerTodas } from './paginacao'
 import { chamarRpc } from './rpc'
@@ -50,18 +51,25 @@ export async function importarLeads(
   leads: DadosLead[],
 ): Promise<{ importados: number; ignorados: number }> {
   const payload = leads.map((l) => {
+    const invalido = () => new ErroNegocio('Há linhas inválidas. Gere a prévia de novo.')
+    if (typeof l?.nomeContato !== 'string' || typeof l.whatsapp !== 'string') throw invalido()
+    for (const v of [l.empresa, l.email, l.cidade, l.linkMvp, l.observacoes]) {
+      if (v !== undefined && v !== null && typeof v !== 'string') throw invalido()
+    }
+    const email = l.email?.trim()
+    const link = l.linkMvp?.trim()
     const whatsapp = normalizarTelefone(l.whatsapp)
     const nome = l.nomeContato.trim()
-    if (!whatsapp || !nome) throw new ErroNegocio('Há linhas inválidas. Gere a prévia de novo.')
+    if (!whatsapp || !nome) throw invalido()
     return {
       nome_contato: nome,
       whatsapp,
       empresa: l.empresa ?? null,
-      email: l.email ?? null,
+      email: email && emailValido(email) ? email : null,
       cidade: l.cidade ?? null,
       nicho_id: l.nichoId ?? null,
       origem_id: l.origemId ?? null,
-      link_mvp: l.linkMvp ?? null,
+      link_mvp: link && linkValido(link) ? link : null,
       observacoes: l.observacoes ?? null,
     }
   })

@@ -33,3 +33,17 @@ export function erroSequencia(seq: number[]): string | null {
 export function horaValida(h: string): boolean {
   return HORA.test(h)
 }
+
+/** Endereço http ou https (bloqueia javascript:, data: etc.). */
+export function linkValido(l: string): boolean {
+  try {
+    const u = new URL(l)
+    return u.protocol === 'http:' || u.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+export function emailValido(e: string): boolean {
+  return /^\S+@\S+\.\S+$/.test(e)
+}

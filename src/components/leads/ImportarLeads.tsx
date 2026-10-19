@@ -112,8 +112,8 @@ export function ImportarLeads({ nichos, origens, origemPadraoId }: Props) {
 
       {resultado && (
         <div role="status" className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-sm">
-          <p className="font-medium text-marinho">{resultado.importados} leads importados.</p>
-          {!!resultado.ignorados && <p>{resultado.ignorados} ignorados porque já existiam.</p>}
+          <p className="font-medium text-marinho">{resultado.importados} {resultado.importados === 1 ? 'lead importado' : 'leads importados'}.</p>
+          {!!resultado.ignorados && <p>{resultado.ignorados} {resultado.ignorados === 1 ? 'ignorado' : 'ignorados'} porque já {resultado.ignorados === 1 ? 'existia' : 'existiam'}.</p>}
           <Link href="/leads" className="mt-2 flex min-h-11 items-center font-medium text-azul underline">
             Ver leads
           </Link>
@@ -141,8 +141,8 @@ export function ImportarLeads({ nichos, origens, origemPadraoId }: Props) {
                 {linhas.map((l) => (
                   <tr key={l.numero} className="border-t border-slate-100 align-top">
                     <td className="py-2 pr-3">{l.numero}</td>
-                    <td className="py-2 pr-3">{l.dados?.nomeContato ?? '—'}</td>
-                    <td className="py-2 pr-3">{l.dados ? formatarTelefone(l.dados.whatsapp) : '—'}</td>
+                    <td className="py-2 pr-3">{l.dados?.nomeContato ?? (l.bruto.nome || '—')}</td>
+                    <td className="py-2 pr-3">{l.dados ? formatarTelefone(l.dados.whatsapp) : (l.bruto.whatsapp || '—')}</td>
                     <td className="py-2 pr-3">
                       {ROTULO[l.situacao]}
                       {l.motivo && <span className="block text-slate-500">{l.motivo}</span>}
@@ -159,7 +159,7 @@ export function ImportarLeads({ nichos, origens, origemPadraoId }: Props) {
             disabled={pendente || novas.length === 0}
             className="flex min-h-11 w-full items-center justify-center rounded-lg bg-laranja px-4 text-sm font-medium text-white disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-azul"
           >
-            {pendente ? 'Importando…' : `Importar ${novas.length} leads`}
+            {pendente ? 'Importando…' : `Importar ${novas.length} ${novas.length === 1 ? 'lead' : 'leads'}`}
           </button>
         </section>
       )}

@@ -15,7 +15,7 @@ import {
   moverEtapa,
 } from '@/lib/servicos/retornos'
 import { concluirTarefa } from '@/lib/servicos/tarefas'
-import { dataValida, erroSequencia, uuidValido, type RespostaAcao } from '@/lib/validacao'
+import { dataValida, emailValido, erroSequencia, linkValido, uuidValido, type RespostaAcao } from '@/lib/validacao'
 import { ErroNegocio, type DadosLead, type SupabaseClient } from '@/lib/servicos/tipos'
 
 export type { RespostaAcao }
@@ -39,15 +39,6 @@ export interface RespostaSalvarLead {
   campo?: CampoLead
   /** Lead que já usa o WhatsApp informado (para linkar no aviso de duplicado). */
   leadExistenteId?: string
-}
-
-function linkValido(l: string): boolean {
-  try {
-    const u = new URL(l)
-    return u.protocol === 'http:' || u.protocol === 'https:'
-  } catch {
-    return false
-  }
 }
 
 function vazioParaNulo(v: string): string | null {
@@ -90,7 +81,7 @@ export async function acaoSalvarLead(leadId: string | null, v: ValoresLead): Pro
   if (!nomeContato) return { erro: 'Informe o nome do contato.', campo: 'nomeContato' }
   if (!v.whatsapp.trim()) return { erro: 'Informe o WhatsApp.', campo: 'whatsapp' }
   const email = vazioParaNulo(v.email)
-  if (email && !/^\S+@\S+\.\S+$/.test(email)) return { erro: 'E-mail inválido.', campo: 'email' }
+  if (email && !emailValido(email)) return { erro: 'E-mail inválido.', campo: 'email' }
   const linkMvp = vazioParaNulo(v.linkMvp)
   if (linkMvp && !linkValido(linkMvp)) {
     return { erro: 'Link inválido. Use um endereço começando com http:// ou https://.', campo: 'linkMvp' }

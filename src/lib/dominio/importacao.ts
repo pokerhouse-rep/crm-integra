@@ -1,4 +1,5 @@
 import { normalizarTelefone } from '@/lib/dominio/telefone'
+import { emailValido, linkValido } from '@/lib/validacao'
 import type { DadosLead } from '@/lib/servicos/tipos'
 
 export type CampoImportacao =
@@ -81,6 +82,8 @@ export interface LinhaImportacao {
   motivo: string | null
   avisos: string[]
   dados: DadosLead | null
+  /** Valores crus da planilha, para identificar a linha mesmo quando recusada. */
+  bruto: { nome: string; whatsapp: string }
 }
 
 /** Não confere o limite de linhas; quem chama confere antes. */
@@ -100,8 +103,9 @@ export function validarLinhas(
       return idx < 0 ? '' : (cel[idx] ?? '').trim()
     }
     const opc = (campo: CampoImportacao): string | undefined => v(campo) || undefined
+    const bruto = { nome: v('nome'), whatsapp: v('whatsapp') }
     const rejeitar = (situacao: SituacaoLinha, motivo: string): LinhaImportacao =>
-      ({ numero, situacao, motivo, avisos: [], dados: null })
+      ({ numero, situacao, motivo, avisos: [], dados: null, bruto })
 
     const nome = v('nome')
     if (!nome) return rejeitar('invalida', 'Nome vazio.')
@@ -128,17 +132,28 @@ export function validarLinhas(
       if (!origemId) avisos.push(`Origem "${origemTxt}" não cadastrada; ficará em branco.`)
     }
 
+    let email = opc('email')
+    if (email && !emailValido(email)) {
+      email = undefined
+      avisos.push('E-mail inválido; ficará em branco.')
+    }
+    let linkMvp = opc('link_mvp')
+    if (linkMvp && !linkValido(linkMvp)) {
+      linkMvp = undefined
+      avisos.push('Link do MVP inválido; ficará em branco.')
+    }
+
     const dados: DadosLead = {
       nomeContato: nome,
       whatsapp,
       empresa: opc('empresa'),
-      email: opc('email'),
+      email,
       cidade: opc('cidade'),
       nichoId,
       origemId,
-      linkMvp: opc('link_mvp'),
+      linkMvp,
       observacoes: opc('observacoes'),
     }
-    return { numero, situacao: 'nova', motivo: null, avisos, dados }
+    return { numero, situacao: 'nova', motivo: null, avisos, dados, bruto }
   })
 }
