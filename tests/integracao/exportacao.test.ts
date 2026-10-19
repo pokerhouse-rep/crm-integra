@@ -28,6 +28,8 @@ describe('exportação', () => {
     expect(l[9]).toBe('Não')
     expect(l[13]).toBe('=SOMA(A1)')
     expect(gerarCsv(linhas)).toContain(";'=SOMA(A1);")
+    const hist = await linhasExportacao(cliente, 'historico')
+    expect(hist.slice(1).some((h) => h[2] === 'Lead cadastrado')).toBe(true)
   })
 
   it('cobrancas exporta valor com vírgula e rótulo da cobrança', async () => {

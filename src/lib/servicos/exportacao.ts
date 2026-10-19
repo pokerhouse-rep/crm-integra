@@ -2,6 +2,7 @@ import { centavosParaCsv, type Celula } from '@/lib/dominio/csv'
 import { rotuloCobranca } from '@/lib/dominio/cobrancas'
 import { formatarDataBR } from '@/lib/dominio/datas'
 import { formatarPercentual } from '@/lib/dominio/dinheiro'
+import { descreverEvento } from '@/lib/dominio/eventos'
 import { dataEmPalmas } from '@/lib/dominio/periodo'
 import { formatarTelefone } from '@/lib/dominio/telefone'
 import { ETAPAS } from '@/lib/dominio/tipos'
@@ -166,7 +167,7 @@ export async function linhasExportacao(db: SupabaseClient, tabela: TabelaExporta
       const rs = await ler(db, 'eventos', '*, leads(nome_contato)', ['ocorrido_em'])
       return [
         ['Data e hora', 'Lead', 'Evento', 'Detalhes'],
-        ...rs.map((e): Celula[] => [dataHora(e.ocorrido_em), nomeLead(e.leads), e.tipo, JSON.stringify(e.dados ?? {})]),
+        ...rs.map((e): Celula[] => [dataHora(e.ocorrido_em), nomeLead(e.leads), descreverEvento(e.tipo, e.dados).texto, JSON.stringify(e.dados ?? {})]),
       ]
     }
   }
