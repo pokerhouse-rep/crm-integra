@@ -1,8 +1,8 @@
 -- Operações de retorno e etapa atômicas: tudo ou nada, com RLS do chamador (security invoker).
 
-create index retornos_lead_idx on public.retornos (lead_id);
-create index tarefas_lead_idx on public.tarefas (lead_id);
-create index eventos_lead_idx on public.eventos (lead_id);
+create index if not exists retornos_lead_idx on public.retornos (lead_id);
+create index if not exists tarefas_lead_idx on public.tarefas (lead_id);
+create index if not exists eventos_lead_idx on public.eventos (lead_id);
 
 create function public.aplicar_resultado(
   p_retorno_id uuid,

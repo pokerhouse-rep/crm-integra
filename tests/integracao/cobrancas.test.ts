@@ -9,6 +9,7 @@ import {
   listarCobrancas,
   marcarPago,
 } from '@/lib/servicos/cobrancas'
+import { cancelarContrato, pausarContrato, reajustarMensalidade } from '@/lib/servicos/contratos'
 import { obterLead } from '@/lib/servicos/leads'
 
 async function todas(cliente: SupabaseClient) {
@@ -137,5 +138,108 @@ describe('cobranças', () => {
     await expect(editarCobranca(cliente, c.id, { vencimento: '2026-11-30' })).rejects.toThrow(
       'Só é possível editar cobranças não pagas.',
     )
+  })
+
+  it('desfazerPagamento em contrato pausado volta como suspensa se vence a partir da pausa', async () => {
+    const { cliente } = await criarUsuarioTeste()
+    const { contratoId } = await criarClienteComContrato(cliente)
+    const p1 = await achar(cliente, 'parcela', 1)
+    const p2 = await achar(cliente, 'parcela', 2)
+    await marcarPago(cliente, p1.id, { pagoEm: '2026-10-20' })
+    await marcarPago(cliente, p2.id, { pagoEm: '2026-10-30' })
+    await pausarContrato(cliente, contratoId, '2026-11-01')
+    await desfazerPagamento(cliente, p2.id)
+    await desfazerPagamento(cliente, p1.id)
+    expect((await achar(cliente, 'parcela', 2)).status).toBe('suspensa')
+    expect((await achar(cliente, 'parcela', 1)).status).toBe('aberta')
+  })
+
+  it('desfazerPagamento em contrato cancelado: falha se vence a partir do cancelamento; antes volta aberta', async () => {
+    const { cliente } = await criarUsuarioTeste()
+    const { contratoId } = await criarClienteComContrato(cliente)
+    const p1 = await achar(cliente, 'parcela', 1)
+    const p2 = await achar(cliente, 'parcela', 2)
+    await marcarPago(cliente, p1.id, { pagoEm: '2026-10-20' })
+    await marcarPago(cliente, p2.id, { pagoEm: '2026-10-30' })
+    await cancelarContrato(cliente, contratoId, '2026-11-01')
+    await expect(desfazerPagamento(cliente, p2.id)).rejects.toThrow(
+      'Contrato cancelado: este pagamento não pode ser desfeito.',
+    )
+    expect((await achar(cliente, 'parcela', 2)).status).toBe('paga')
+    await desfazerPagamento(cliente, p1.id)
+    expect((await achar(cliente, 'parcela', 1)).status).toBe('aberta')
+  })
+
+  it('a lista traz status e data de cancelamento do contrato', async () => {
+    const { cliente } = await criarUsuarioTeste()
+    const { contratoId } = await criarClienteComContrato(cliente)
+    const p1 = await achar(cliente, 'parcela', 1)
+    await marcarPago(cliente, p1.id, { pagoEm: '2026-10-20' })
+    await cancelarContrato(cliente, contratoId, '2026-10-19')
+    const lista = await listarCobrancas(cliente, { mes: '2026-10' }, '2026-10-19')
+    expect(lista.find((c) => c.id === p1.id)).toMatchObject({ contratoStatus: 'cancelado', contratoCanceladoEm: '2026-10-19' })
+  })
+})
+
+describe('auto-cura das mensalidades (sanear_mensalidades)', () => {
+  async function inserirMensalidade(cliente: SupabaseClient, contratoId: string, competencia: string, valor: number) {
+    const { data: item } = await cliente.from('contrato_itens').select('id').eq('contrato_id', contratoId).eq('tipo', 'recorrente').single()
+    const { data: contrato } = await cliente.from('contratos').select('lead_id').eq('id', contratoId).single()
+    const { data, error } = await cliente
+      .from('cobrancas')
+      .insert({
+        contrato_id: contratoId,
+        contrato_item_id: item!.id,
+        lead_id: contrato!.lead_id,
+        tipo: 'mensalidade',
+        competencia,
+        vencimento: `${competencia.slice(0, 8)}19`,
+        valor_centavos: valor,
+        status: 'aberta',
+      })
+      .select('id')
+      .single()
+    if (error) throw new Error(error.message)
+    return data!.id as string
+  }
+
+  async function porId(cliente: SupabaseClient, id: string) {
+    const { data } = await cliente.from('cobrancas').select('*').eq('id', id).maybeSingle()
+    return data
+  }
+
+  it('apaga mensalidade aberta criada depois do cancelamento', async () => {
+    const { cliente } = await criarUsuarioTeste()
+    const { contratoId } = await criarClienteComContrato(cliente)
+    await cancelarContrato(cliente, contratoId, '2026-11-05')
+    const id = await inserirMensalidade(cliente, contratoId, '2027-01-01', 15000)
+    await garantirMensalidades(cliente, '2026-11-05')
+    expect(await porId(cliente, id)).toBeNull()
+  })
+
+  it('suspende mensalidade aberta criada durante a pausa', async () => {
+    const { cliente } = await criarUsuarioTeste()
+    const { contratoId } = await criarClienteComContrato(cliente)
+    await pausarContrato(cliente, contratoId, '2026-11-05')
+    const id = await inserirMensalidade(cliente, contratoId, '2027-01-01', 15000)
+    await garantirMensalidades(cliente, '2026-11-05')
+    expect((await porId(cliente, id))!.status).toBe('suspensa')
+  })
+
+  it('recalcula mensalidade com valor antigo numa competência reajustada, mas preserva edição manual', async () => {
+    const { cliente } = await criarUsuarioTeste()
+    const { contratoId } = await criarClienteComContrato(cliente)
+    await garantirMensalidades(cliente, '2026-11-05') // novembro e dezembro
+    const { data: item } = await cliente.from('contrato_itens').select('id').eq('contrato_id', contratoId).eq('tipo', 'recorrente').single()
+    await reajustarMensalidade(cliente, item!.id, { valorCentavos: 18000, aPartirDe: '2026-12-01' })
+    const jan = await inserirMensalidade(cliente, contratoId, '2027-01-01', 15000)
+    const dez = (await todas(cliente)).find((c) => c.competencia === '2026-12-01')!
+    expect(Number(dez.valor_centavos)).toBe(18000)
+    await editarCobranca(cliente, dez.id, { valorCentavos: 12345 })
+    expect(await garantirMensalidades(cliente, '2026-11-05')).toBe(0)
+    expect(Number((await porId(cliente, jan))!.valor_centavos)).toBe(18000)
+    expect(Number((await porId(cliente, dez.id))!.valor_centavos)).toBe(12345)
+    const nov = (await todas(cliente)).find((c) => c.competencia === '2026-11-01')!
+    expect(Number(nov.valor_centavos)).toBe(15000)
   })
 })

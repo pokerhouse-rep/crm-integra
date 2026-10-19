@@ -182,6 +182,7 @@ begin
 end;
 $$;
 
+-- Desfazer pagamento respeita o contrato. Ordem de locks: lead, contrato, cobrança.
 create function public.desfazer_pagamento(p_cobranca_id uuid)
 returns void
 language plpgsql
@@ -190,21 +191,34 @@ set search_path = ''
 as $$
 declare
   v_lead_id uuid;
+  v_contrato_id uuid;
+  v_contrato public.contratos;
   v_cobranca public.cobrancas;
+  v_status public.status_cobranca := 'aberta';
 begin
-  select lead_id into v_lead_id from public.cobrancas where id = p_cobranca_id;
+  select lead_id, contrato_id into v_lead_id, v_contrato_id from public.cobrancas where id = p_cobranca_id;
   if not found then
     raise exception 'Cobrança não encontrada.' using errcode = 'P0001';
   end if;
   perform 1 from public.leads where id = v_lead_id for update;
+  select * into v_contrato from public.contratos where id = v_contrato_id for update;
   select * into v_cobranca from public.cobrancas where id = p_cobranca_id for update;
+  if not found then
+    raise exception 'Cobrança não encontrada.' using errcode = 'P0001';
+  end if;
 
   if v_cobranca.status <> 'paga' then
     raise exception 'Esta cobrança não está paga.' using errcode = 'P0001';
   end if;
 
+  if v_contrato.status = 'cancelado' and v_cobranca.vencimento >= v_contrato.cancelado_em then
+    raise exception 'Contrato cancelado: este pagamento não pode ser desfeito.' using errcode = 'P0001';
+  elsif v_contrato.status = 'pausado' and v_cobranca.vencimento >= v_contrato.pausado_em then
+    v_status := 'suspensa';
+  end if;
+
   update public.cobrancas
-  set status = 'aberta', pago_em = null, valor_pago_centavos = null
+  set status = v_status, pago_em = null, valor_pago_centavos = null
   where id = p_cobranca_id;
 
   insert into public.eventos (lead_id, tipo, dados)
@@ -387,3 +401,87 @@ grant execute on function public.cancelar_contrato(uuid, date) to authenticated;
 revoke execute on function public.reajustar_item(uuid, date, bigint) from public, anon;
 grant execute on function public.reajustar_item(uuid, date, bigint) to authenticated;
 grant execute on function public.travar_contrato(uuid) to authenticated;
+
+-- Auto-cura das mensalidades (chamada no fim de garantirMensalidades). Idempotente.
+-- Corrige mensalidades criadas em corrida com pausar/cancelar/reajustar:
+--  * contrato cancelado: apaga abertas/suspensas com vencimento >= cancelado_em;
+--  * contrato pausado: suspende as abertas com vencimento >= pausado_em;
+--  * valor diferente do vigente da competência (reajuste): recalcula, mas só quando o valor
+--    atual é um valor que o sistema gerou (base do item ou de algum reajuste dele), para não
+--    desfazer uma edição manual feita em "Editar vencimento/valor".
+-- Locks: lead e depois contrato (como as demais), em ordem fixa (lead_id, contrato_id).
+-- "for no key update" em vez de "for update": não conflita com o "key share" que o insert de
+-- cobranças (chave estrangeira) pega em leads/contratos, evitando deadlock com um
+-- garantirMensalidades concorrente; continua conflitando com as travas "for update" das outras RPCs.
+create function public.sanear_mensalidades()
+returns int
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v record;
+  v_contrato public.contratos;
+  v_total int := 0;
+  v_n int;
+begin
+  for v in
+    select distinct c.lead_id, c.id
+    from public.contratos c
+    join public.cobrancas cb on cb.contrato_id = c.id
+    where cb.tipo = 'mensalidade' and cb.status in ('aberta', 'suspensa')
+    order by c.lead_id, c.id
+  loop
+    perform 1 from public.leads where id = v.lead_id for no key update;
+    select * into v_contrato from public.contratos where id = v.id for no key update;
+    if not found then
+      continue;
+    end if;
+
+    if v_contrato.status = 'cancelado' then
+      delete from public.cobrancas
+      where contrato_id = v.id and tipo = 'mensalidade' and status in ('aberta', 'suspensa')
+        and vencimento >= v_contrato.cancelado_em;
+      get diagnostics v_n = row_count;
+      v_total := v_total + v_n;
+    elsif v_contrato.status = 'pausado' then
+      update public.cobrancas set status = 'suspensa'
+      where contrato_id = v.id and tipo = 'mensalidade' and status = 'aberta'
+        and vencimento >= v_contrato.pausado_em;
+      get diagnostics v_n = row_count;
+      v_total := v_total + v_n;
+    end if;
+
+    update public.cobrancas cb
+    set valor_centavos = vig.valor
+    from (
+      select cb2.id,
+        coalesce(
+          (select r.valor_centavos from public.reajustes r
+           where r.contrato_item_id = cb2.contrato_item_id and r.a_partir_de <= cb2.competencia
+           order by r.a_partir_de desc limit 1),
+          i.valor_centavos
+        ) as valor,
+        i.valor_centavos as base
+      from public.cobrancas cb2
+      join public.contrato_itens i on i.id = cb2.contrato_item_id
+      where cb2.contrato_id = v.id and cb2.tipo = 'mensalidade' and cb2.status in ('aberta', 'suspensa')
+    ) vig
+    where cb.id = vig.id
+      and cb.valor_centavos <> vig.valor
+      and (
+        cb.valor_centavos = vig.base
+        or exists (
+          select 1 from public.reajustes r
+          where r.contrato_item_id = cb.contrato_item_id and r.valor_centavos = cb.valor_centavos
+        )
+      );
+    get diagnostics v_n = row_count;
+    v_total := v_total + v_n;
+  end loop;
+  return v_total;
+end;
+$$;
+
+revoke execute on function public.sanear_mensalidades() from public, anon;
+grant execute on function public.sanear_mensalidades() to authenticated;

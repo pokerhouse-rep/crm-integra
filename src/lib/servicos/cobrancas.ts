@@ -9,6 +9,7 @@ import {
   valorVigente,
   vencimentoNaCompetencia,
 } from '@/lib/dominio/cobrancas'
+import type { StatusContrato } from '@/lib/dominio/tipos'
 import { obterConfig } from './config'
 import { chamarRpc } from './rpc'
 import { ErroNegocio, lancarSeErro, type Cobranca, type SupabaseClient } from './tipos'
@@ -17,14 +18,16 @@ export interface CobrancaResumo extends Cobranca {
   rotulo: string
   lead: { id: string; nome_contato: string; empresa: string | null; whatsapp: string }
   contratoDescricao: string
+  contratoStatus: StatusContrato
+  contratoCanceladoEm: DataISO | null
 }
 
 const SELECT_RESUMO =
-  '*, contrato_itens(descricao), contratos(descricao), leads(id, nome_contato, empresa, whatsapp)'
+  '*, contrato_itens(descricao), contratos(descricao, status, cancelado_em), leads(id, nome_contato, empresa, whatsapp)'
 
 type LinhaResumo = Cobranca & {
   contrato_itens: { descricao: string }
-  contratos: { descricao: string }
+  contratos: { descricao: string; status: StatusContrato; cancelado_em: DataISO | null }
   leads: CobrancaResumo['lead']
 }
 
@@ -43,10 +46,15 @@ function paraResumo(l: LinhaResumo): CobrancaResumo {
     }),
     lead: leads,
     contratoDescricao: contratos.descricao,
+    contratoStatus: contratos.status,
+    contratoCanceladoEm: contratos.cancelado_em,
   }
 }
 
-/** Cria as mensalidades que faltam até o horizonte (P7). Idempotente: duplicatas são ignoradas pelo banco. */
+/**
+ * Cria as mensalidades que faltam até o horizonte (P7). Idempotente: duplicatas são ignoradas pelo banco.
+ * No fim, `sanear_mensalidades` corrige o que uma corrida com pausar/cancelar/reajustar possa ter deixado errado.
+ */
 export async function garantirMensalidades(db: SupabaseClient, hoje: DataISO): Promise<number> {
   const ate = horizonteCobrancas(hoje)
   const { data, error } = await db
@@ -84,14 +92,17 @@ export async function garantirMensalidades(db: SupabaseClient, hoje: DataISO): P
       })
     }
   }
-  if (novas.length === 0) return 0
-
-  const { data: criadas, error: e2 } = await db
-    .from('cobrancas')
-    .upsert(novas, { onConflict: 'contrato_item_id,competencia', ignoreDuplicates: true })
-    .select('id')
-  lancarSeErro(e2, 'Falha ao criar mensalidades')
-  return criadas?.length ?? 0
+  let criadas = 0
+  if (novas.length > 0) {
+    const { data: linhas, error: e2 } = await db
+      .from('cobrancas')
+      .upsert(novas, { onConflict: 'contrato_item_id,competencia', ignoreDuplicates: true })
+      .select('id')
+    lancarSeErro(e2, 'Falha ao criar mensalidades')
+    criadas = linhas?.length ?? 0
+  }
+  await chamarRpc(db, 'sanear_mensalidades', {}, 'Falha ao conferir mensalidades')
+  return criadas
 }
 
 export async function cobrancasDoPainel(

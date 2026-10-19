@@ -102,6 +102,14 @@ export function valorVigente(
   return vigente ? vigente.valorCentavos : valorBase
 }
 
+/** Espelha `desfazer_pagamento`: pagamento de contrato cancelado com vencimento a partir do cancelamento não volta. */
+export function podeDesfazerPagamento(
+  c: { vencimento: DataISO },
+  contrato: { status: 'ativo' | 'pausado' | 'cancelado'; canceladoEm: DataISO | null },
+): boolean {
+  return !(contrato.status === 'cancelado' && contrato.canceladoEm !== null && c.vencimento >= contrato.canceladoEm)
+}
+
 export function situacaoCobranca(
   c: { status: StatusCobranca; vencimento: DataISO },
   hoje: DataISO,

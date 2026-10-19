@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   competenciaDe, somarMeses, vencimentoNaCompetencia, horizonteCobrancas, diaVencimentoPadrao,
   planejarCobrancasIniciais, competenciasFaltantes, valorVigente, situacaoCobranca, resumirMes,
-  rotuloCobranca, mensagemCobranca,
+  rotuloCobranca, mensagemCobranca, podeDesfazerPagamento,
 } from '@/lib/dominio/cobrancas'
 
 const resumo = (p: ReturnType<typeof planejarCobrancasIniciais>) =>
@@ -112,5 +112,13 @@ describe('cobrancas', () => {
       .toBe('Olá Maria! O pagamento de Site · parcela 2 de 3, no valor de R$ 450,00, venceu em 19/11/2026. Consegue verificar para mim? Qualquer dúvida, estou à disposição.')
     expect(mensagemCobranca(c, '2026-11-19'))
       .toBe('Olá Maria! Passando para lembrar do pagamento de Site · parcela 2 de 3, no valor de R$ 450,00, com vencimento em 19/11/2026. Qualquer dúvida, estou à disposição.')
+  })
+
+  it('podeDesfazerPagamento bloqueia só contrato cancelado com vencimento a partir do cancelamento', () => {
+    const c = { vencimento: '2026-11-19' }
+    expect(podeDesfazerPagamento(c, { status: 'ativo', canceladoEm: null })).toBe(true)
+    expect(podeDesfazerPagamento(c, { status: 'pausado', canceladoEm: null })).toBe(true)
+    expect(podeDesfazerPagamento(c, { status: 'cancelado', canceladoEm: '2026-11-19' })).toBe(false)
+    expect(podeDesfazerPagamento(c, { status: 'cancelado', canceladoEm: '2026-11-20' })).toBe(true)
   })
 })
