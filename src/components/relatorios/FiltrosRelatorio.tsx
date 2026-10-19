@@ -16,6 +16,11 @@ interface Props {
 const CAMPO =
   'min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-800 focus-visible:outline-2 focus-visible:outline-azul'
 
+/** Data completa aaaa-mm-dd com ano >= 2000 (evita aplicar anos parciais como 0002). */
+function dataCompleta(v: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(v) && Number(v.slice(0, 4)) >= 2000
+}
+
 export function FiltrosRelatorio({ periodo, de, ate, nichoId, origemId, nichos, origens }: Props) {
   const router = useRouter()
 
@@ -52,8 +57,9 @@ export function FiltrosRelatorio({ periodo, de, ate, nichoId, origemId, nichos, 
             <input
               type="date"
               className={`${CAMPO} mt-1`}
+              key={`de-${de}`}
               defaultValue={de}
-              onChange={(e) => e.target.value && aplicar({ de: e.target.value })}
+              onBlur={(e) => dataCompleta(e.target.value) && e.target.value !== de && aplicar({ de: e.target.value })}
             />
           </label>
           <label className="block text-sm font-medium text-slate-700">
@@ -61,8 +67,9 @@ export function FiltrosRelatorio({ periodo, de, ate, nichoId, origemId, nichos, 
             <input
               type="date"
               className={`${CAMPO} mt-1`}
+              key={`ate-${ate}`}
               defaultValue={ate}
-              onChange={(e) => e.target.value && aplicar({ ate: e.target.value })}
+              onBlur={(e) => dataCompleta(e.target.value) && e.target.value !== ate && aplicar({ ate: e.target.value })}
             />
           </label>
         </div>
@@ -89,6 +96,7 @@ export function FiltrosRelatorio({ periodo, de, ate, nichoId, origemId, nichos, 
           ))}
         </select>
       </label>
+      <p className="text-xs text-slate-500 sm:col-span-2 lg:col-span-4">Nicho e origem filtram só a conversão.</p>
     </div>
   )
 }

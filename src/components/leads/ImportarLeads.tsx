@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
-import type { LinhaImportacao, SituacaoLinha } from '@/lib/dominio/importacao'
+import { LIMITE_BYTES_IMPORTACAO, type LinhaImportacao, type SituacaoLinha } from '@/lib/dominio/importacao'
 import { formatarTelefone } from '@/lib/dominio/telefone'
 import {
   acaoConfirmarImportacao,
@@ -29,6 +29,7 @@ const ROTULO: Record<SituacaoLinha, string> = {
 export function ImportarLeads({ nichos, origens, origemPadraoId }: Props) {
   const [arquivoChave, setArquivoChave] = useState(0)
   const [linhas, setLinhas] = useState<LinhaImportacao[] | null>(null)
+  const [ignoradas, setIgnoradas] = useState<string[]>([])
   const [erro, setErro] = useState<string | null>(null)
   const [resultado, setResultado] = useState<RespostaImportacao | null>(null)
   const [pendente, iniciar] = useTransition()
@@ -40,15 +41,31 @@ export function ImportarLeads({ nichos, origens, origemPadraoId }: Props) {
     setErro(null)
     setResultado(null)
     setLinhas(null)
+    setIgnoradas([])
+    const arquivo = form.get('arquivo')
+    if (arquivo instanceof File && arquivo.size > LIMITE_BYTES_IMPORTACAO) {
+      setErro('Arquivo maior que 1 MB.')
+      return
+    }
     iniciar(async () => {
       const r = await acaoPreviaImportacao(form)
       if (r.erro) setErro(r.erro)
-      else setLinhas(r.linhas ?? [])
+      else {
+        setLinhas(r.linhas ?? [])
+        setIgnoradas(r.ignoradas ?? [])
+      }
     })
   }
 
   const novas = (linhas ?? []).filter((l) => l.situacao === 'nova')
   const conta = (s: SituacaoLinha) => (linhas ?? []).filter((l) => l.situacao === s).length
+
+  function limparPrevia() {
+    setLinhas(null)
+    setIgnoradas([])
+    setResultado(null)
+    setErro(null)
+  }
 
   function confirmar() {
     if (pendente || novas.length === 0) return
@@ -61,6 +78,7 @@ export function ImportarLeads({ nichos, origens, origemPadraoId }: Props) {
       }
       setResultado(r)
       setLinhas(null)
+      setIgnoradas([])
       setArquivoChave((k) => k + 1)
     })
   }
@@ -70,7 +88,7 @@ export function ImportarLeads({ nichos, origens, origemPadraoId }: Props) {
       <form onSubmit={ver} className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <label className="block text-sm text-slate-700">
           Nicho padrão
-          <select name="nichoId" defaultValue="" className={entrada}>
+          <select name="nichoId" defaultValue="" onChange={limparPrevia} className={entrada}>
             <option value="">Nenhum</option>
             {nichos.map((n) => (
               <option key={n.id} value={n.id}>{n.nome}</option>
@@ -79,7 +97,7 @@ export function ImportarLeads({ nichos, origens, origemPadraoId }: Props) {
         </label>
         <label className="block text-sm text-slate-700">
           Origem padrão
-          <select name="origemId" defaultValue={origemPadraoId} className={entrada}>
+          <select name="origemId" defaultValue={origemPadraoId} onChange={limparPrevia} className={entrada}>
             <option value="">Nenhuma</option>
             {origens.map((o) => (
               <option key={o.id} value={o.id}>{o.nome}</option>
@@ -123,9 +141,13 @@ export function ImportarLeads({ nichos, origens, origemPadraoId }: Props) {
       {linhas && (
         <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" aria-label="Prévia">
           <p className="text-sm font-medium text-marinho">
-            {conta('nova')} novos · {conta('duplicada_crm')} já no CRM · {conta('duplicada_planilha')} repetidos ·{' '}
+            {conta('nova')} {conta('nova') === 1 ? 'novo' : 'novos'} · {conta('duplicada_crm')} já no CRM ·{' '}
+            {conta('duplicada_planilha')} {conta('duplicada_planilha') === 1 ? 'repetido' : 'repetidos'} ·{' '}
             {conta('invalida')} com erro
           </p>
+          {ignoradas.length > 0 && (
+            <p className="text-sm text-slate-600">Colunas ignoradas: {ignoradas.join(', ')}.</p>
+          )}
           <div className="overflow-x-auto">
             <table className="w-full min-w-[32rem] text-left text-sm">
               <thead className="text-slate-500">

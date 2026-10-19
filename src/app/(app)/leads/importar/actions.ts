@@ -51,6 +51,8 @@ export async function acaoConfirmarImportacao(leads: DadosLead[]): Promise<Respo
   try {
     const r = await importarLeads(await criarClienteServidor(), leads)
     revalidatePath('/leads')
+    revalidatePath('/funil')
+    revalidatePath('/hoje')
     return r
   } catch (e) {
     if (e instanceof ErroNegocio) return { erro: e.message }

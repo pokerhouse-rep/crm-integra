@@ -1,7 +1,15 @@
 import { describe, it, expect } from 'vitest'
-import { dataValida, erroSequencia, horaValida, uuidValido } from '@/lib/validacao'
+import { dataValida, erroSequencia, horaValida, linkValido, uuidValido } from '@/lib/validacao'
 
 describe('validacao', () => {
+  it('linkValido exige http(s):// completo', () => {
+    expect(linkValido('http:foo.com')).toBe(false)
+    expect(linkValido('https:/foo.com')).toBe(false)
+    expect(linkValido('javascript:alert(1)')).toBe(false)
+    expect(linkValido('HTTPS://x.com')).toBe(true)
+    expect(linkValido('https://x.com/a')).toBe(true)
+  })
+
   it('dataValida aceita datas reais e rejeita as impossíveis', () => {
     expect(dataValida('2026-10-18')).toBe(true)
     expect(dataValida('2028-02-29')).toBe(true)

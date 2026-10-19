@@ -36,6 +36,8 @@ export function horaValida(h: string): boolean {
 
 /** Endereço http ou https (bloqueia javascript:, data: etc.). */
 export function linkValido(l: string): boolean {
+  // O banco exige ^https?:// (leads_link_mvp_ck); 'http:foo.com' parseia mas seria recusado.
+  if (!/^https?:\/\//i.test(l)) return false
   try {
     const u = new URL(l)
     return u.protocol === 'http:' || u.protocol === 'https:'

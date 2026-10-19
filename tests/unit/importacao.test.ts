@@ -74,6 +74,13 @@ describe('importacao', () => {
     expect(r[0].avisos).toEqual(['E-mail inválido; ficará em branco.', 'Link do MVP inválido; ficará em branco.'])
   })
 
+  it('link sem // fica em branco com aviso', () => {
+    const o = { nichos: [], origens: [], nichoPadraoId: null, origemPadraoId: null, whatsappsExistentes: new Set<string>() }
+    const r = validarLinhas([['Ana', '63999998888', 'http:foo.com']], ['nome', 'whatsapp', 'link_mvp'], o)
+    expect(r[0].dados?.linkMvp).toBeUndefined()
+    expect(r[0].avisos).toEqual(['Link do MVP inválido; ficará em branco.'])
+  })
+
   it('linhas recusadas guardam os valores crus', () => {
     const o = { nichos: [], origens: [], nichoPadraoId: null, origemPadraoId: null, whatsappsExistentes: new Set<string>() }
     const r = validarLinhas([['Ana', '123']], ['nome', 'whatsapp'], o)
