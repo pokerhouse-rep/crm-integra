@@ -5,10 +5,12 @@ import { linkWhatsApp, preencherModelo } from '@/lib/dominio/mensagens'
 import { criarClienteServidor } from '@/lib/supabase/server'
 import { agendaDoDia, type ItemAgenda } from '@/lib/servicos/agenda'
 import { listarOpcoes, obterConfig } from '@/lib/servicos/config'
+import { propostasAguardando } from '@/lib/servicos/propostas'
 import { cobrancasDoPainel, garantirMensalidades } from '@/lib/servicos/cobrancas'
 import { CartaoCobranca } from '@/components/cobrancas/CartaoCobranca'
 import { CartaoRetorno } from '@/components/hoje/CartaoRetorno'
 import { CartaoTarefa } from '@/components/hoje/CartaoTarefa'
+import { ListaPropostasAguardando } from '@/components/hoje/ListaPropostasAguardando'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,7 +23,7 @@ export default async function HojePage() {
   } catch (e) {
     console.error('Hoje: falha ao gerar mensalidades', e)
   }
-  const [agenda, nichos, motivos, painel, config] = await Promise.all([
+  const [agenda, nichos, motivos, painel, config, propostas] = await Promise.all([
     agendaDoDia(db, hoje),
     listarOpcoes(db, 'nicho'),
     listarOpcoes(db, 'motivo_perda'),
@@ -30,6 +32,10 @@ export default async function HojePage() {
       return null
     }),
     obterConfig(db),
+    propostasAguardando(db, hoje).catch((e: unknown) => {
+      console.error('Hoje: falha ao carregar propostas aguardando', e)
+      return []
+    }),
   ])
   const diasLembrete = config.diasLembreteCobranca
   const qtdCobrancas = painel ? painel.atrasadas.length + painel.vencendo.length : 0
@@ -163,6 +169,7 @@ export default async function HojePage() {
           )}
         </div>
       )}
+      <ListaPropostasAguardando propostas={propostas} />
     </div>
   )
 }

@@ -1,5 +1,7 @@
 import { agendarPrazo, type DataISO } from '@/lib/dominio/datas'
 import { diaVencimentoPadrao, horizonteCobrancas, planejarCobrancasIniciais } from '@/lib/dominio/cobrancas'
+import { dataEmPalmas } from '@/lib/dominio/periodo'
+import { diasEntre } from '@/lib/dominio/relatorios'
 import { totaisProposta, validarItem, valorLiquido, type ItemProposta } from '@/lib/dominio/propostas'
 import { obterConfig } from './config'
 import { chamarRpc } from './rpc'
@@ -260,4 +262,59 @@ export async function valoresAbertosPorLead(
     atual.recorrenteCentavos += Number(ultima.total_recorrente_centavos)
   }
   return saida
+}
+
+export interface PropostaAguardando {
+  id: string
+  leadId: string
+  nomeLead: string
+  empresa: string | null
+  titulo: string
+  versao: number
+  unicoCentavos: number
+  recorrenteCentavos: number
+  enviadaEm: DataISO
+  dias: number
+}
+
+/** D12: propostas enviadas (última versão enviada de cada), da mais antiga para a mais recente. */
+export async function propostasAguardando(db: SupabaseClient, hoje: DataISO): Promise<PropostaAguardando[]> {
+  const { data, error } = await db
+    .from('propostas')
+    .select(
+      'id, lead_id, titulo, leads!inner(nome_contato, empresa), versoes_proposta(numero, total_unico_centavos, total_recorrente_centavos, enviada_em)',
+    )
+    .eq('status', 'enviada')
+  lancarSeErro(error, 'Falha ao ler propostas aguardando resposta')
+  const saida: PropostaAguardando[] = []
+  for (const p of (data ?? []) as unknown as {
+    id: string
+    lead_id: string
+    titulo: string
+    leads: { nome_contato: string; empresa: string | null }
+    versoes_proposta: {
+      numero: number
+      total_unico_centavos: number
+      total_recorrente_centavos: number
+      enviada_em: string | null
+    }[]
+  }[]) {
+    const enviadas = p.versoes_proposta.filter((v) => v.enviada_em !== null)
+    const ultima = enviadas.sort((a, b) => b.numero - a.numero)[0]
+    if (!ultima?.enviada_em) continue
+    const enviadaEm = dataEmPalmas(ultima.enviada_em)
+    saida.push({
+      id: p.id,
+      leadId: p.lead_id,
+      nomeLead: p.leads.nome_contato,
+      empresa: p.leads.empresa,
+      titulo: p.titulo,
+      versao: ultima.numero,
+      unicoCentavos: Number(ultima.total_unico_centavos),
+      recorrenteCentavos: Number(ultima.total_recorrente_centavos),
+      enviadaEm,
+      dias: diasEntre(enviadaEm, hoje),
+    })
+  }
+  return saida.sort((a, b) => a.enviadaEm.localeCompare(b.enviadaEm) || a.id.localeCompare(b.id))
 }
