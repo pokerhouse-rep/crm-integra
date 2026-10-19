@@ -2,10 +2,11 @@
 
 import { useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { MessageCircle } from 'lucide-react'
-import { mensagemCobranca, situacaoCobranca } from '@/lib/dominio/cobrancas'
+import { mensagemCobranca, podeDesfazerPagamento, situacaoCobranca } from '@/lib/dominio/cobrancas'
 import { formatarDataBR, type DataISO } from '@/lib/dominio/datas'
-import { formatarReais, reaisParaCampo } from '@/lib/dominio/dinheiro'
+import { formatarReais, lerReais, reaisParaCampo } from '@/lib/dominio/dinheiro'
 import { linkWhatsApp } from '@/lib/dominio/mensagens'
 import type { CobrancaResumo } from '@/lib/servicos/cobrancas'
 import { acaoDesfazerPagamento, acaoEditarCobranca, acaoMarcarPago } from '@/app/(app)/clientes/actions'
@@ -26,12 +27,26 @@ const SELO = {
   futura: { texto: 'A vencer', classe: 'bg-slate-100 text-slate-700' },
 } as const
 
+/** Tempo em que o cartão recém-recebido fica na tela com "Desfazer" antes de a tela ser atualizada. */
+const SEGUNDOS_DESFAZER = 10
+
+// Um único temporizador para a tela toda: vários "Recebido" seguidos atualizam a tela uma vez só,
+// 10 s depois do último. Sobrevive à navegação, então também limpa o cache das telas visitadas.
+let temporizadorAtualizar: ReturnType<typeof setTimeout> | undefined
+function agendarAtualizacao(atualizar: () => void) {
+  clearTimeout(temporizadorAtualizar)
+  temporizadorAtualizar = setTimeout(atualizar, SEGUNDOS_DESFAZER * 1000)
+}
+
 const botaoBase =
   'flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-azul disabled:opacity-50'
 const campo = 'mt-1 block min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-base'
 
 export function CartaoCobranca({ cobranca: c, hoje, diasLembrete, permitirEdicao = false }: Props) {
+  const router = useRouter()
   const [pendente, iniciar] = useTransition()
+  // Valor recebido agora há pouco: o cartão continua visível com "Desfazer" (em Hoje ele sumiria na hora).
+  const [recemPago, setRecemPago] = useState<number | null>(null)
   const ocupado = useRef(false)
   const [erro, setErro] = useState<string | null>(null)
   const [painel, setPainel] = useState<'outro' | 'editar' | null>(null)
@@ -63,7 +78,7 @@ export function CartaoCobranca({ cobranca: c, hoje, diasLembrete, permitirEdicao
   const aberta = c.status === 'aberta'
   const naoPaga = c.status !== 'paga'
 
-  function rodar(acao: () => Promise<{ erro?: string }>) {
+  function rodar(acao: () => Promise<{ erro?: string }>, aoConcluir?: () => void) {
     if (ocupado.current) return
     ocupado.current = true
     setErro(null)
@@ -71,17 +86,69 @@ export function CartaoCobranca({ cobranca: c, hoje, diasLembrete, permitirEdicao
       try {
         const r = await acao()
         if (r.erro) setErro(r.erro)
-        else setPainel(null)
+        else {
+          setPainel(null)
+          aoConcluir?.()
+        }
       } finally {
         ocupado.current = false
       }
     })
   }
 
+  function receber(dataPagamento?: string, valor?: string) {
+    const recebido = valor !== undefined ? (lerReais(valor) ?? c.valor_centavos) : c.valor_centavos
+    rodar(
+      () => acaoMarcarPago(c.id, dataPagamento, valor),
+      () => {
+        setRecemPago(recebido)
+        agendarAtualizacao(() => router.refresh())
+      },
+    )
+  }
+
+  function desfazer() {
+    rodar(
+      () => acaoDesfazerPagamento(c.id),
+      () => {
+        if (recemPago !== null) clearTimeout(temporizadorAtualizar)
+        setRecemPago(null)
+      },
+    )
+  }
+
+  const podeDesfazer = podeDesfazerPagamento(c, { status: c.contratoStatus, canceladoEm: c.contratoCanceladoEm })
+
   const mensagem = mensagemCobranca(
     { nome: c.lead.nome_contato, rotulo: c.rotulo, valorCentavos: c.valor_centavos, vencimento: c.vencimento },
     hoje,
   )
+
+  // Quando a tela é atualizada e a cobrança já vem paga, volta o cartão normal (que também tem "Desfazer").
+  if (recemPago !== null && c.status !== 'paga') {
+    return (
+      <article className="rounded-xl border border-emerald-300 bg-white p-4 shadow-sm" aria-busy={pendente}>
+        <p className="truncate text-base font-semibold text-marinho">{c.lead.nome_contato}</p>
+        <p className="text-sm text-slate-600">{c.rotulo}</p>
+        <div className="mt-3 flex items-center justify-between gap-2 rounded-lg bg-emerald-50 p-2" role="status">
+          <p className="text-sm font-medium text-emerald-800">Recebido · {formatarReais(recemPago)}</p>
+          <button
+            type="button"
+            disabled={pendente}
+            onClick={desfazer}
+            className={`${botaoBase} border border-slate-300 bg-white text-slate-700`}
+          >
+            Desfazer
+          </button>
+        </div>
+        {erro && (
+          <p role="alert" className="mt-2 text-sm text-red-700">
+            {erro}
+          </p>
+        )}
+      </article>
+    )
+  }
 
   return (
     <article
@@ -114,7 +181,7 @@ export function CartaoCobranca({ cobranca: c, hoje, diasLembrete, permitirEdicao
           <button
             type="button"
             disabled={pendente}
-            onClick={() => rodar(() => acaoMarcarPago(c.id))}
+            onClick={() => receber()}
             className={`${botaoBase} col-span-2 bg-marinho text-white`}
           >
             Recebido
@@ -139,12 +206,12 @@ export function CartaoCobranca({ cobranca: c, hoje, diasLembrete, permitirEdicao
         </div>
       )}
 
-      {c.status === 'paga' && (
+      {c.status === 'paga' && podeDesfazer && (
         <div className="mt-3">
           <button
             type="button"
             disabled={pendente}
-            onClick={() => rodar(() => acaoDesfazerPagamento(c.id))}
+            onClick={desfazer}
             className={`${botaoBase} w-full border border-slate-300 text-slate-700`}
           >
             Desfazer
@@ -177,7 +244,7 @@ export function CartaoCobranca({ cobranca: c, hoje, diasLembrete, permitirEdicao
           <button
             type="button"
             disabled={pendente}
-            onClick={() => rodar(() => acaoMarcarPago(c.id, dataPago, valorPago))}
+            onClick={() => receber(dataPago, valorPago)}
             className={`${botaoBase} w-full bg-marinho text-white`}
           >
             Confirmar recebimento

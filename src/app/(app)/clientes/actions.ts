@@ -20,7 +20,12 @@ function revalidarTudo() {
   revalidatePath('/clientes', 'layout')
 }
 
-async function executar(id: unknown, rotulo: string, fn: (db: SupabaseClient) => Promise<void>): Promise<RespostaAcao> {
+async function executar(
+  id: unknown,
+  rotulo: string,
+  fn: (db: SupabaseClient) => Promise<void>,
+  revalidar = true,
+): Promise<RespostaAcao> {
   if (typeof id !== 'string' || !uuidValido(id)) return { erro: `${rotulo} inválido.` }
   try {
     await fn(await criarClienteServidor())
@@ -29,7 +34,7 @@ async function executar(id: unknown, rotulo: string, fn: (db: SupabaseClient) =>
     if (e instanceof ErroNegocio) return { erro: e.message }
     throw e
   }
-  revalidarTudo()
+  if (revalidar) revalidarTudo()
   return {}
 }
 
@@ -44,8 +49,13 @@ export async function acaoMarcarPago(cobrancaId: string, pagoEm?: string, valor?
     if (lido === null || lido <= 0) return { erro: 'Valor recebido inválido. Exemplo: 1.500,00' }
     centavos = lido
   }
-  return executar(cobrancaId, 'Cobrança', (db) =>
-    marcarPago(db, cobrancaId, { pagoEm: pagoEm ?? hojeEmPalmas(), valorPagoCentavos: centavos }),
+  // Sem revalidar: o cartão fica na tela com "Recebido · R$ X — Desfazer" (em Hoje ele sumiria na hora).
+  // As telas são dinâmicas, então ao navegar os dados vêm atualizados; "Desfazer" revalida.
+  return executar(
+    cobrancaId,
+    'Cobrança',
+    (db) => marcarPago(db, cobrancaId, { pagoEm: pagoEm ?? hojeEmPalmas(), valorPagoCentavos: centavos }),
+    false,
   )
 }
 

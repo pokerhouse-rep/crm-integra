@@ -46,7 +46,7 @@ export default async function CobrancasPage({
         <Link href="/clientes" className="inline-flex min-h-11 items-center text-sm text-azul underline">
           ‹ Clientes
         </Link>
-        <h1 className="text-xl font-semibold text-marinho">{atrasadas ? 'Cobranças atrasadas' : 'Cobranças do mês'}</h1>
+        <h1 className="text-xl font-semibold text-marinho">{atrasadas ? 'Cobranças atrasadas' : `Cobranças com vencimento em ${mes.slice(5, 7)}/${mes.slice(0, 4)}`}</h1>
       </header>
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -70,6 +70,7 @@ export default async function CobrancasPage({
         </Link>
       </div>
 
+      {!atrasadas && <p className="mb-1 text-xs text-slate-600">Resumo por data de vencimento</p>}
       <dl className="mb-4 grid grid-cols-3 gap-2 text-center">
         {[
           ['Previsto', total.previstoCentavos],

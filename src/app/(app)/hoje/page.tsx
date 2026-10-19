@@ -14,16 +14,24 @@ export const dynamic = 'force-dynamic'
 export default async function HojePage() {
   const db = await criarClienteServidor()
   const hoje = hojeEmPalmas()
-  await garantirMensalidades(db, hoje)
+  // Cobranças não podem derrubar a tela Hoje: se falharem, retornos e tarefas aparecem mesmo assim.
+  try {
+    await garantirMensalidades(db, hoje)
+  } catch (e) {
+    console.error('Hoje: falha ao gerar mensalidades', e)
+  }
   const [agenda, nichos, motivos, painel, config] = await Promise.all([
     agendaDoDia(db, hoje),
     listarOpcoes(db, 'nicho'),
     listarOpcoes(db, 'motivo_perda'),
-    cobrancasDoPainel(db, hoje),
+    cobrancasDoPainel(db, hoje).catch((e: unknown) => {
+      console.error('Hoje: falha ao carregar cobranças', e)
+      return null
+    }),
     obterConfig(db),
   ])
   const diasLembrete = config.diasLembreteCobranca
-  const qtdCobrancas = painel.atrasadas.length + painel.vencendo.length
+  const qtdCobrancas = painel ? painel.atrasadas.length + painel.vencendo.length : 0
   const nomeNicho = new Map(nichos.map((n) => [n.id, n.nome]))
   const motivosSimples = motivos.map((m) => ({ id: m.id, nome: m.nome }))
 
@@ -85,9 +93,15 @@ export default async function HojePage() {
         <h1 className="text-xl font-semibold text-marinho">Hoje, {formatarDataBR(hoje).slice(0, 5)}</h1>
         <p className="text-sm text-slate-600">
           {qtdRetornos} {qtdRetornos === 1 ? 'retorno' : 'retornos'} · {qtdTarefas}{' '}
-          {qtdTarefas === 1 ? 'tarefa' : 'tarefas'} · {qtdCobrancas}{' '}
-          {qtdCobrancas === 1 ? 'cobrança' : 'cobranças'}
+          {qtdTarefas === 1 ? 'tarefa' : 'tarefas'}
+          {painel && (
+            <>
+              {' '}
+              · {qtdCobrancas} {qtdCobrancas === 1 ? 'cobrança' : 'cobranças'}
+            </>
+          )}
         </p>
+        {!painel && <p className="mt-1 text-sm text-slate-500">Não foi possível carregar as cobranças.</p>}
       </header>
 
       {todos.length === 0 && qtdCobrancas === 0 ? (
@@ -118,7 +132,7 @@ export default async function HojePage() {
               <div className="space-y-3">{agenda.hoje.map((i) => renderizar(i, false))}</div>
             </section>
           )}
-          {qtdCobrancas > 0 && (
+          {painel && qtdCobrancas > 0 && (
             <section aria-labelledby="sec-cobrancas">
               <h2 id="sec-cobrancas" className="mb-2 text-sm font-semibold uppercase tracking-wide text-marinho">
                 Cobranças ({qtdCobrancas})
