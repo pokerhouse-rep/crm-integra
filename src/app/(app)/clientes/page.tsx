@@ -21,7 +21,12 @@ export default async function ClientesPage({ searchParams }: { searchParams: Pro
   const filtro = FILTROS.find((f) => f.valor === situacao)?.valor ?? 'ativo'
   const db = await criarClienteServidor()
   const hoje = hojeEmPalmas()
-  await garantirMensalidades(db, hoje)
+  // Cobranças não podem derrubar a tela: se falharem, a lista de clientes aparece mesmo assim.
+  try {
+    await garantirMensalidades(db, hoje)
+  } catch (e) {
+    console.error('Clientes: falha ao gerar mensalidades', e)
+  }
   // MRR sempre dos ativos, independente do filtro da lista.
   const todos = await listarContratos(db, hoje)
   const mrr = mrrAtivo(todos)

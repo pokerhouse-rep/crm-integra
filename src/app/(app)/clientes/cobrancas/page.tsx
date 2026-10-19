@@ -21,7 +21,12 @@ export default async function CobrancasPage({
   const hoje = hojeEmPalmas()
   const atrasadas = atrasadasParam === '1'
   const mes = mesParam && /^20\d{2}-(0[1-9]|1[0-2])$/.test(mesParam) ? mesParam : hoje.slice(0, 7)
-  await garantirMensalidades(db, hoje)
+  // Cobranças não podem derrubar a tela: se a geração falhar, a lista existente aparece mesmo assim.
+  try {
+    await garantirMensalidades(db, hoje)
+  } catch (e) {
+    console.error('Cobranças: falha ao gerar mensalidades', e)
+  }
   const [config, cobrancas] = await Promise.all([
     obterConfig(db),
     listarCobrancas(db, atrasadas ? { atrasadas: true } : { mes }, hoje),
