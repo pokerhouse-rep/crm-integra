@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useDraggable } from '@dnd-kit/core'
 import { formatarDataBR, type DataISO } from '@/lib/dominio/datas'
+import { formatarValorNegociacao } from '@/lib/dominio/dinheiro'
 import { ETAPAS, type Etapa } from '@/lib/dominio/tipos'
 import type { LeadResumo } from '@/lib/servicos/tipos'
 
@@ -14,9 +15,12 @@ interface Props {
   aoMover?: (nova: Etapa) => void
   desabilitado?: boolean
   arrastando?: boolean
+  /** Valor em negociação do lead (propostas em rascunho/enviadas). */
+  valor?: { unicoCentavos: number; recorrenteCentavos: number }
 }
 
-export function CartaoLeadFunil({ lead, etapa, hoje, aoMover, desabilitado, arrastando }: Props) {
+export function CartaoLeadFunil({ lead, etapa, hoje, aoMover, desabilitado, arrastando, valor }: Props) {
+  const textoValor = valor && etapa !== 'perdido' ? formatarValorNegociacao(valor) : ''
   const atrasado = lead.proximo_retorno !== null && lead.proximo_retorno < hoje
   return (
     <div className={`rounded-xl border border-slate-200 bg-white shadow-sm ${arrastando ? 'opacity-40' : ''}`}>
@@ -34,6 +38,7 @@ export function CartaoLeadFunil({ lead, etapa, hoje, aoMover, desabilitado, arra
             <span className="shrink-0 rounded-full bg-azul/15 px-2 py-0.5 text-xs font-medium text-marinho">Frio</span>
           )}
         </div>
+        {textoValor && <p className="mt-1 text-sm font-medium text-marinho">{textoValor}</p>}
         <p className={`mt-1 text-sm ${atrasado ? 'font-medium text-laranja' : 'text-slate-500'}`}>
           {lead.proximo_retorno
             ? `Retorno: ${formatarDataBR(lead.proximo_retorno)}${atrasado ? ' (atrasado)' : ''}`
