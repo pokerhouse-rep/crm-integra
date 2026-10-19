@@ -23,3 +23,21 @@ CRM pessoal (Next.js + Supabase local). Desenvolvimento apenas local.
 - Com o PC e o celular no mesmo Wi-Fi, abra `http://<ip-do-pc>:3000` no navegador do celular (descubra o IP com `ipconfig`, campo "Endereco IPv4"). Rode o app com `npm run dev -- -H 0.0.0.0` se ele nao responder por fora do PC.
 - Se nao abrir, o Firewall do Windows provavelmente esta bloqueando a porta 3000. Isso e decisao do dono; o projeto nao altera o firewall. Para liberar por conta propria: PowerShell **como administrador**, `New-NetFirewallRule -DisplayName "CRM Integra dev 3000" -Direction Inbound -Protocol TCP -LocalPort 3000 -Action Allow -Profile Private`. Para desfazer: `Remove-NetFirewallRule -DisplayName "CRM Integra dev 3000"`.
 - PWA: ha manifest e icones (gerados da logo com `python -I scripts/gerar-icones.py`), mas nao ha service worker nem cache offline. A instalacao como app no celular exige HTTPS fora de `localhost`; na rede local o celular usa o app pelo navegador normalmente. A instalacao completa vem quando o dono autorizar a hospedagem.
+
+## Propostas, clientes e cobrancas
+
+- No lead, crie uma proposta com itens do catalogo (valor unico em ate 48 parcelas e/ou mensalidade), com desconto em % ou R$. Cada versao enviada fica congelada; para mudar, crie uma nova versao. Enviar leva o lead para "Proposta enviada" (v1) ou "Negociacao" (v2 em diante) e agenda um retorno em 3 dias.
+- Aceitar a proposta cria o contrato e transforma o lead em cliente. As parcelas viram cobrancas previstas; as mensalidades sao geradas ate o mes seguinte sempre que "Hoje" ou "Clientes" abrem.
+- A aba **Clientes** mostra contratos (pausar, reativar, cancelar, reajustar) e o painel de cobrancas do mes. Marcar como recebida e 1 toque. Cobrancas vencidas e lembretes (3 dias antes) aparecem em "Hoje".
+
+### Simular vencimentos (teste local)
+
+Abra o Studio local em `http://127.0.0.1:54423` (SQL Editor) ou use `psql` na porta 54422 e mude as datas:
+
+```sql
+-- deixar uma cobranca atrasada
+update public.cobrancas set vencimento = current_date - 5 where id = '<id>';
+-- fazer um retorno pos-proposta cair hoje
+update public.retornos set data_prevista = current_date
+ where origem = 'proposta' and status = 'pendente';
+```
