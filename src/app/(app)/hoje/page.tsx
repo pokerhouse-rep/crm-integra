@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { ChartColumn } from 'lucide-react'
 import { formatarDataBR, hojeEmPalmas } from '@/lib/dominio/datas'
 import { linkWhatsApp, preencherModelo } from '@/lib/dominio/mensagens'
 import { criarClienteServidor } from '@/lib/supabase/server'
@@ -89,6 +90,12 @@ export default async function HojePage() {
 
   return (
     <div className="mx-auto max-w-2xl">
+      <Link
+        href="/relatorios"
+        className="mb-3 flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 focus-visible:outline-2 focus-visible:outline-azul md:hidden"
+      >
+        <ChartColumn size={20} aria-hidden /> Relatórios
+      </Link>
       <header className="mb-4">
         <h1 className="text-xl font-semibold text-marinho">Hoje, {formatarDataBR(hoje).slice(0, 5)}</h1>
         <p className="text-sm text-slate-600">

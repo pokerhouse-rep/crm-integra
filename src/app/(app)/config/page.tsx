@@ -1,4 +1,5 @@
-import { LogOut } from 'lucide-react'
+import Link from 'next/link'
+import { ChartColumn, LogOut } from 'lucide-react'
 import { sair } from '../../login/actions'
 import { criarClienteServidor } from '@/lib/supabase/server'
 import { listarModelos, listarTodasOpcoes, obterConfig } from '@/lib/servicos/config'
@@ -30,6 +31,12 @@ export default async function Pagina() {
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <h1 className="text-xl font-semibold text-marinho">Configurações</h1>
+      <Link
+        href="/relatorios"
+        className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 focus-visible:outline-2 focus-visible:outline-azul md:hidden"
+      >
+        <ChartColumn size={20} aria-hidden /> Relatórios
+      </Link>
       <Secao titulo="Retornos">
         <FormPrazos sequencia={config.sequenciaPadrao} diasReativacao={config.diasReativacao}
           diasRetornoProposta={config.diasRetornoProposta}

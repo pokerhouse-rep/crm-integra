@@ -23,7 +23,7 @@ export function BarraInferior() {
         aria-label="Navegação principal"
         className="fixed inset-x-0 bottom-0 z-20 flex border-t border-slate-200 bg-white md:hidden"
       >
-        {ITENS_NAV.map(({ href, rotulo, icone: Icone }) => {
+        {ITENS_NAV.filter((i) => i.celular).map(({ href, rotulo, icone: Icone }) => {
           const ativo = caminho === href || caminho.startsWith(href + '/')
           return (
             <Link
