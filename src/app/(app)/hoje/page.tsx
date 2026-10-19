@@ -3,7 +3,9 @@ import { formatarDataBR, hojeEmPalmas } from '@/lib/dominio/datas'
 import { linkWhatsApp, preencherModelo } from '@/lib/dominio/mensagens'
 import { criarClienteServidor } from '@/lib/supabase/server'
 import { agendaDoDia, type ItemAgenda } from '@/lib/servicos/agenda'
-import { listarOpcoes } from '@/lib/servicos/config'
+import { listarOpcoes, obterConfig } from '@/lib/servicos/config'
+import { cobrancasDoPainel, garantirMensalidades } from '@/lib/servicos/cobrancas'
+import { CartaoCobranca } from '@/components/cobrancas/CartaoCobranca'
 import { CartaoRetorno } from '@/components/hoje/CartaoRetorno'
 import { CartaoTarefa } from '@/components/hoje/CartaoTarefa'
 
@@ -12,11 +14,16 @@ export const dynamic = 'force-dynamic'
 export default async function HojePage() {
   const db = await criarClienteServidor()
   const hoje = hojeEmPalmas()
-  const [agenda, nichos, motivos] = await Promise.all([
+  await garantirMensalidades(db, hoje)
+  const [agenda, nichos, motivos, painel, config] = await Promise.all([
     agendaDoDia(db, hoje),
     listarOpcoes(db, 'nicho'),
     listarOpcoes(db, 'motivo_perda'),
+    cobrancasDoPainel(db, hoje),
+    obterConfig(db),
   ])
+  const diasLembrete = config.diasLembreteCobranca
+  const qtdCobrancas = painel.atrasadas.length + painel.vencendo.length
   const nomeNicho = new Map(nichos.map((n) => [n.id, n.nome]))
   const motivosSimples = motivos.map((m) => ({ id: m.id, nome: m.nome }))
 
@@ -78,11 +85,12 @@ export default async function HojePage() {
         <h1 className="text-xl font-semibold text-marinho">Hoje, {formatarDataBR(hoje).slice(0, 5)}</h1>
         <p className="text-sm text-slate-600">
           {qtdRetornos} {qtdRetornos === 1 ? 'retorno' : 'retornos'} · {qtdTarefas}{' '}
-          {qtdTarefas === 1 ? 'tarefa' : 'tarefas'}
+          {qtdTarefas === 1 ? 'tarefa' : 'tarefas'} · {qtdCobrancas}{' '}
+          {qtdCobrancas === 1 ? 'cobrança' : 'cobranças'}
         </p>
       </header>
 
-      {todos.length === 0 ? (
+      {todos.length === 0 && qtdCobrancas === 0 ? (
         <div className="rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm">
           <p className="text-lg text-slate-700">Nada para hoje. 🎯</p>
           <Link
@@ -108,6 +116,28 @@ export default async function HojePage() {
                 Hoje ({agenda.hoje.length})
               </h2>
               <div className="space-y-3">{agenda.hoje.map((i) => renderizar(i, false))}</div>
+            </section>
+          )}
+          {qtdCobrancas > 0 && (
+            <section aria-labelledby="sec-cobrancas">
+              <h2 id="sec-cobrancas" className="mb-2 text-sm font-semibold uppercase tracking-wide text-marinho">
+                Cobranças ({qtdCobrancas})
+              </h2>
+              <div className="space-y-3">
+                {painel.atrasadas.map((c) => (
+                  <CartaoCobranca key={c.id} cobranca={c} hoje={hoje} diasLembrete={diasLembrete} />
+                ))}
+                {painel.vencendo.length > 0 && (
+                  <>
+                    <h3 className="pt-1 text-xs font-semibold text-slate-600">
+                      Vencem em até {diasLembrete} {diasLembrete === 1 ? 'dia' : 'dias'}
+                    </h3>
+                    {painel.vencendo.map((c) => (
+                      <CartaoCobranca key={c.id} cobranca={c} hoje={hoje} diasLembrete={diasLembrete} />
+                    ))}
+                  </>
+                )}
+              </div>
             </section>
           )}
         </div>
