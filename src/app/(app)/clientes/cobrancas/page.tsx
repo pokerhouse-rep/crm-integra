@@ -20,7 +20,7 @@ export default async function CobrancasPage({
   const db = await criarClienteServidor()
   const hoje = hojeEmPalmas()
   const atrasadas = atrasadasParam === '1'
-  const mes = mesParam && /^\d{4}-(0[1-9]|1[0-2])$/.test(mesParam) ? mesParam : hoje.slice(0, 7)
+  const mes = mesParam && /^20\d{2}-(0[1-9]|1[0-2])$/.test(mesParam) ? mesParam : hoje.slice(0, 7)
   await garantirMensalidades(db, hoje)
   const [config, cobrancas] = await Promise.all([
     obterConfig(db),
@@ -62,7 +62,7 @@ export default async function CobrancasPage({
           </>
         )}
         <Link
-          href={atrasadas ? '/clientes/cobrancas' : '/clientes/cobrancas?atrasadas=1'}
+          href={atrasadas ? `/clientes/cobrancas?mes=${mes}` : '/clientes/cobrancas?atrasadas=1'}
           aria-current={atrasadas ? 'true' : undefined}
           className={`${link} ${atrasadas ? '!border-laranja !bg-laranja !text-white' : 'text-laranja'}`}
         >
@@ -85,7 +85,13 @@ export default async function CobrancasPage({
 
       {cobrancas.length === 0 ? (
         <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-slate-700 shadow-sm">
-          {atrasadas ? 'Nenhuma cobrança atrasada. 🎯' : 'Nenhuma cobrança neste mês.'}
+          <p>{atrasadas ? 'Nenhuma cobrança atrasada. 🎯' : 'Nenhuma cobrança neste mês.'}</p>
+          <Link
+            href={atrasadas ? `/clientes/cobrancas?mes=${mes}` : '/clientes'}
+            className="mt-4 inline-flex min-h-11 items-center rounded-lg bg-laranja px-5 text-sm font-medium text-white focus-visible:outline-2 focus-visible:outline-azul"
+          >
+            {atrasadas ? 'Ver o mês' : 'Ver clientes'}
+          </Link>
         </div>
       ) : (
         <div className="space-y-3">

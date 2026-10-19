@@ -1,16 +1,8 @@
 import Link from 'next/link'
 import { formatarDataBR } from '@/lib/dominio/datas'
-import { formatarReais } from '@/lib/dominio/dinheiro'
+import { descreverItem } from '@/lib/dominio/contratos'
 import type { ContratoResumo } from '@/lib/servicos/contratos'
 import { COR_STATUS_CONTRATO, ROTULO_STATUS_CONTRATO } from '@/components/propostas/rotulos'
-
-export function descreverItem(i: ContratoResumo['itens'][number]): string {
-  if (i.tipo === 'recorrente') {
-    const desde = i.mes_inicio ? ` desde ${i.mes_inicio.slice(5, 7)}/${i.mes_inicio.slice(0, 4)}` : ''
-    return `${formatarReais(i.valor_centavos)}/mês${desde}`
-  }
-  return i.parcelas > 1 ? `${formatarReais(i.valor_centavos)} em ${i.parcelas}x` : `${formatarReais(i.valor_centavos)} à vista`
-}
 
 export function CartaoContrato({ contrato: c }: { contrato: ContratoResumo }) {
   const nome = c.lead.empresa ? `${c.lead.nome_contato} · ${c.lead.empresa}` : c.lead.nome_contato

@@ -16,6 +16,7 @@ import { dataValida, uuidValido, type RespostaAcao } from '@/lib/validacao'
 
 function revalidarTudo() {
   revalidatePath('/hoje')
+  revalidatePath('/leads/[id]', 'page')
   revalidatePath('/clientes', 'layout')
 }
 

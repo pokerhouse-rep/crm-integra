@@ -10,7 +10,7 @@ import { ErroNegocio } from '@/lib/servicos/tipos'
 import { uuidValido } from '@/lib/validacao'
 import { CartaoCobranca } from '@/components/cobrancas/CartaoCobranca'
 import { AcoesContrato } from '@/components/clientes/AcoesContrato'
-import { descreverItem } from '@/components/clientes/CartaoContrato'
+import { descreverItem } from '@/lib/dominio/contratos'
 import { FormReajuste } from '@/components/clientes/FormReajuste'
 import { COR_STATUS_CONTRATO, ROTULO_STATUS_CONTRATO } from '@/components/propostas/rotulos'
 
@@ -105,9 +105,15 @@ export default async function ContratoPage({ params }: { params: Promise<{ contr
           Cobranças
         </h2>
         {cobrancas.length === 0 ? (
-          <p className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
-            Nenhuma cobrança neste contrato.
-          </p>
+          <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
+            <p>Nenhuma cobrança neste contrato.</p>
+            <Link
+              href="/clientes/cobrancas"
+              className="mt-3 inline-flex min-h-11 items-center rounded-lg bg-laranja px-4 text-sm font-medium text-white focus-visible:outline-2 focus-visible:outline-azul"
+            >
+              Ver cobranças do mês
+            </Link>
+          </div>
         ) : (
           <div className="space-y-3">
             {cobrancas.map((cb) => (

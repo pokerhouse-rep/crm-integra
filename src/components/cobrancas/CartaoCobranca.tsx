@@ -35,9 +35,27 @@ export function CartaoCobranca({ cobranca: c, hoje, diasLembrete, permitirEdicao
   const ocupado = useRef(false)
   const [erro, setErro] = useState<string | null>(null)
   const [painel, setPainel] = useState<'outro' | 'editar' | null>(null)
-  const [data, setData] = useState<string>(hoje)
-  const [valor, setValor] = useState(reaisParaCampo(c.valor_centavos))
-  const [vencimento, setVencimento] = useState<string>(c.vencimento)
+  const [dataPago, setDataPago] = useState<string>(hoje)
+  const [valorPago, setValorPago] = useState(reaisParaCampo(c.valor_centavos))
+  const [vencimentoEd, setVencimentoEd] = useState<string>(c.vencimento)
+  const [valorEd, setValorEd] = useState(reaisParaCampo(c.valor_centavos))
+
+  // Campos sempre recomeçam dos valores ATUAIS da cobrança ao abrir o painel.
+  function alternar(p: 'outro' | 'editar') {
+    if (painel === p) {
+      setPainel(null)
+      return
+    }
+    setErro(null)
+    if (p === 'outro') {
+      setDataPago(hoje)
+      setValorPago(reaisParaCampo(c.valor_centavos))
+    } else {
+      setVencimentoEd(c.vencimento)
+      setValorEd(reaisParaCampo(c.valor_centavos))
+    }
+    setPainel(p)
+  }
 
   const situacao = situacaoCobranca(c, hoje, diasLembrete)
   const selo = SELO[situacao]
@@ -105,7 +123,7 @@ export function CartaoCobranca({ cobranca: c, hoje, diasLembrete, permitirEdicao
             type="button"
             disabled={pendente}
             aria-expanded={painel === 'outro'}
-            onClick={() => setPainel(painel === 'outro' ? null : 'outro')}
+            onClick={() => alternar('outro')}
             className={`${botaoBase} border border-marinho text-marinho`}
           >
             Outro valor/data
@@ -139,7 +157,7 @@ export function CartaoCobranca({ cobranca: c, hoje, diasLembrete, permitirEdicao
           type="button"
           disabled={pendente}
           aria-expanded={painel === 'editar'}
-          onClick={() => setPainel(painel === 'editar' ? null : 'editar')}
+          onClick={() => alternar('editar')}
           className={`${botaoBase} mt-2 w-full border border-slate-300 text-slate-700`}
         >
           Editar vencimento/valor
@@ -150,16 +168,16 @@ export function CartaoCobranca({ cobranca: c, hoje, diasLembrete, permitirEdicao
         <div className="mt-3 space-y-3 rounded-lg bg-slate-50 p-3">
           <label className="block text-sm text-slate-700">
             Data do pagamento
-            <input type="date" value={data} onChange={(e) => setData(e.target.value)} className={campo} />
+            <input type="date" value={dataPago} onChange={(e) => setDataPago(e.target.value)} className={campo} />
           </label>
           <label className="block text-sm text-slate-700">
             Valor recebido (R$)
-            <input type="text" inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} className={campo} />
+            <input type="text" inputMode="decimal" value={valorPago} onChange={(e) => setValorPago(e.target.value)} className={campo} />
           </label>
           <button
             type="button"
             disabled={pendente}
-            onClick={() => rodar(() => acaoMarcarPago(c.id, data, valor))}
+            onClick={() => rodar(() => acaoMarcarPago(c.id, dataPago, valorPago))}
             className={`${botaoBase} w-full bg-marinho text-white`}
           >
             Confirmar recebimento
@@ -171,16 +189,16 @@ export function CartaoCobranca({ cobranca: c, hoje, diasLembrete, permitirEdicao
         <div className="mt-3 space-y-3 rounded-lg bg-slate-50 p-3">
           <label className="block text-sm text-slate-700">
             Vencimento
-            <input type="date" value={vencimento} onChange={(e) => setVencimento(e.target.value)} className={campo} />
+            <input type="date" value={vencimentoEd} onChange={(e) => setVencimentoEd(e.target.value)} className={campo} />
           </label>
           <label className="block text-sm text-slate-700">
             Valor (R$)
-            <input type="text" inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} className={campo} />
+            <input type="text" inputMode="decimal" value={valorEd} onChange={(e) => setValorEd(e.target.value)} className={campo} />
           </label>
           <button
             type="button"
             disabled={pendente}
-            onClick={() => rodar(() => acaoEditarCobranca(c.id, vencimento, valor))}
+            onClick={() => rodar(() => acaoEditarCobranca(c.id, vencimentoEd, valorEd))}
             className={`${botaoBase} w-full bg-marinho text-white`}
           >
             Salvar
